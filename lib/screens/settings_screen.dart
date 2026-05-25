@@ -19,7 +19,12 @@ class SettingsScreen extends StatelessWidget {
 
     return SafeArea(
       child: SingleChildScrollView(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 28),
+        padding: EdgeInsets.only(
+          left: 20, 
+          right: 20, 
+          top: 28, 
+          bottom: MediaQuery.of(context).padding.bottom + 110,
+        ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [

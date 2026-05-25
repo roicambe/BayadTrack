@@ -1,6 +1,7 @@
 import 'package:isar/isar.dart';
 import 'package:path_provider/path_provider.dart';
 import 'transaction_model.dart';
+import '../services/receipt_parser.dart';
 
 /// IsarService is the single entry point for all database operations.
 ///
@@ -48,6 +49,8 @@ class IsarService {
   /// If the record already has an id, it will update (upsert) it.
   Future<void> saveTransaction(TransactionRecord record) async {
     final isar = await db;
+    // Auto-populate recordedAt timestamp on create if not already set
+    record.recordedAt ??= DateTime.now();
     // writeTxn = write transaction (required for any data change)
     await isar.writeTxn(() async {
       await isar.transactionRecords.put(record);
@@ -75,10 +78,12 @@ class IsarService {
   /// is added, updated, or deleted. Use with StreamBuilder in your UI.
   ///
   /// Example:
-  ///   StreamBuilder<List<TransactionRecord>>(
-  ///     stream: isarService.listenToTransactions(),
-  ///     builder: (context, snapshot) { ... }
-  ///   )
+  /// ```dart
+  /// StreamBuilder<List<TransactionRecord>>(
+  ///   stream: isarService.listenToTransactions(),
+  ///   builder: (context, snapshot) { ... }
+  /// )
+  /// ```
   Stream<List<TransactionRecord>> listenToTransactions() async* {
     final isar = await db;
     yield* isar.transactionRecords
@@ -109,5 +114,24 @@ class IsarService {
     await isar.writeTxn(() async {
       await isar.transactionRecords.clear();
     });
+  }
+
+  // ─────────────────────────────────────────────
+  // SAVE FROM PARSED RECEIPT
+  // ─────────────────────────────────────────────
+
+  /// Convenience method: builds a [TransactionRecord] from a [ParsedReceipt]
+  /// and saves it. Falls back to sensible defaults for any null fields.
+  Future<void> saveFromParsedReceipt(ParsedReceipt receipt) async {
+    final record = TransactionRecord()
+      ..platform         = receipt.platform
+      ..transactionType  = receipt.transactionType
+      ..amount           = receipt.amount ?? 0.0
+      ..referenceNumber  = receipt.referenceNumber ?? 'UNKNOWN'
+      ..timestamp        = receipt.transactionDate ?? DateTime.now()
+      ..senderName       = receipt.personName
+      ..senderNumber     = receipt.phoneNumber
+      ..remainingBalance = receipt.remainingBalance;
+    await saveTransaction(record);
   }
 }

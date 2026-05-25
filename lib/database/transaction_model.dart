@@ -51,6 +51,12 @@ class TransactionRecord {
   /// Optional: phone number of sender
   String? senderNumber;
 
+  /// Optional: remaining balance of e-wallet
+  double? remainingBalance;
+
+  /// Optional: the exact date and time the transaction was recorded in the database
+  DateTime? recordedAt;
+
   /// Optional: any extra notes you want to add
   String? notes;
 }

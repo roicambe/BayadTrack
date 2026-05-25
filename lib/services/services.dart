@@ -1,5 +1,13 @@
-// SMS background workers and Bluetooth print engines will be added here.
-// Example files to be created in this folder:
-//   - sms_listener_service.dart   (reads incoming SMS receipts)
-//   - sms_parser_service.dart     (extracts GCash/Maya data from SMS text)
-//   - bluetooth_print_service.dart (connects to Bluetooth receipt printers)
+// Services layer — all backend logic lives here.
+//
+// Current services:
+//   - app_toast.dart          — global reusable toast/snackbar system
+//   - ocr_service.dart        — on-device image text recognition (ML Kit)
+//   - receipt_parser.dart     — regex extractor for GCash/Maya receipt text
+//
+// Planned services:
+//   - bluetooth_print_service.dart  (connects to Bluetooth receipt printers)
+
+export 'app_toast.dart';
+export 'ocr_service.dart';
+export 'receipt_parser.dart';

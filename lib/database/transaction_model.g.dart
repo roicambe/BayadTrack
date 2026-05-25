@@ -33,28 +33,38 @@ const TransactionRecordSchema = CollectionSchema(
       type: IsarType.string,
       enumMap: _TransactionRecordplatformEnumValueMap,
     ),
-    r'referenceNumber': PropertySchema(
+    r'recordedAt': PropertySchema(
       id: 3,
+      name: r'recordedAt',
+      type: IsarType.dateTime,
+    ),
+    r'referenceNumber': PropertySchema(
+      id: 4,
       name: r'referenceNumber',
       type: IsarType.string,
     ),
+    r'remainingBalance': PropertySchema(
+      id: 5,
+      name: r'remainingBalance',
+      type: IsarType.double,
+    ),
     r'senderName': PropertySchema(
-      id: 4,
+      id: 6,
       name: r'senderName',
       type: IsarType.string,
     ),
     r'senderNumber': PropertySchema(
-      id: 5,
+      id: 7,
       name: r'senderNumber',
       type: IsarType.string,
     ),
     r'timestamp': PropertySchema(
-      id: 6,
+      id: 8,
       name: r'timestamp',
       type: IsarType.dateTime,
     ),
     r'transactionType': PropertySchema(
-      id: 7,
+      id: 9,
       name: r'transactionType',
       type: IsarType.string,
       enumMap: _TransactionRecordtransactionTypeEnumValueMap,
@@ -113,11 +123,13 @@ void _transactionRecordSerialize(
   writer.writeDouble(offsets[0], object.amount);
   writer.writeString(offsets[1], object.notes);
   writer.writeString(offsets[2], object.platform.name);
-  writer.writeString(offsets[3], object.referenceNumber);
-  writer.writeString(offsets[4], object.senderName);
-  writer.writeString(offsets[5], object.senderNumber);
-  writer.writeDateTime(offsets[6], object.timestamp);
-  writer.writeString(offsets[7], object.transactionType.name);
+  writer.writeDateTime(offsets[3], object.recordedAt);
+  writer.writeString(offsets[4], object.referenceNumber);
+  writer.writeDouble(offsets[5], object.remainingBalance);
+  writer.writeString(offsets[6], object.senderName);
+  writer.writeString(offsets[7], object.senderNumber);
+  writer.writeDateTime(offsets[8], object.timestamp);
+  writer.writeString(offsets[9], object.transactionType.name);
 }
 
 TransactionRecord _transactionRecordDeserialize(
@@ -133,12 +145,14 @@ TransactionRecord _transactionRecordDeserialize(
   object.platform = _TransactionRecordplatformValueEnumMap[
           reader.readStringOrNull(offsets[2])] ??
       Platform.gcash;
-  object.referenceNumber = reader.readString(offsets[3]);
-  object.senderName = reader.readStringOrNull(offsets[4]);
-  object.senderNumber = reader.readStringOrNull(offsets[5]);
-  object.timestamp = reader.readDateTime(offsets[6]);
+  object.recordedAt = reader.readDateTimeOrNull(offsets[3]);
+  object.referenceNumber = reader.readString(offsets[4]);
+  object.remainingBalance = reader.readDoubleOrNull(offsets[5]);
+  object.senderName = reader.readStringOrNull(offsets[6]);
+  object.senderNumber = reader.readStringOrNull(offsets[7]);
+  object.timestamp = reader.readDateTime(offsets[8]);
   object.transactionType = _TransactionRecordtransactionTypeValueEnumMap[
-          reader.readStringOrNull(offsets[7])] ??
+          reader.readStringOrNull(offsets[9])] ??
       TransactionType.sent;
   return object;
 }
@@ -159,14 +173,18 @@ P _transactionRecordDeserializeProp<P>(
               reader.readStringOrNull(offset)] ??
           Platform.gcash) as P;
     case 3:
-      return (reader.readString(offset)) as P;
+      return (reader.readDateTimeOrNull(offset)) as P;
     case 4:
-      return (reader.readStringOrNull(offset)) as P;
+      return (reader.readString(offset)) as P;
     case 5:
-      return (reader.readStringOrNull(offset)) as P;
+      return (reader.readDoubleOrNull(offset)) as P;
     case 6:
-      return (reader.readDateTime(offset)) as P;
+      return (reader.readStringOrNull(offset)) as P;
     case 7:
+      return (reader.readStringOrNull(offset)) as P;
+    case 8:
+      return (reader.readDateTime(offset)) as P;
+    case 9:
       return (_TransactionRecordtransactionTypeValueEnumMap[
               reader.readStringOrNull(offset)] ??
           TransactionType.sent) as P;
@@ -713,6 +731,80 @@ extension TransactionRecordQueryFilter
   }
 
   QueryBuilder<TransactionRecord, TransactionRecord, QAfterFilterCondition>
+      recordedAtIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNull(
+        property: r'recordedAt',
+      ));
+    });
+  }
+
+  QueryBuilder<TransactionRecord, TransactionRecord, QAfterFilterCondition>
+      recordedAtIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNotNull(
+        property: r'recordedAt',
+      ));
+    });
+  }
+
+  QueryBuilder<TransactionRecord, TransactionRecord, QAfterFilterCondition>
+      recordedAtEqualTo(DateTime? value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'recordedAt',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<TransactionRecord, TransactionRecord, QAfterFilterCondition>
+      recordedAtGreaterThan(
+    DateTime? value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'recordedAt',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<TransactionRecord, TransactionRecord, QAfterFilterCondition>
+      recordedAtLessThan(
+    DateTime? value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'recordedAt',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<TransactionRecord, TransactionRecord, QAfterFilterCondition>
+      recordedAtBetween(
+    DateTime? lower,
+    DateTime? upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'recordedAt',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+      ));
+    });
+  }
+
+  QueryBuilder<TransactionRecord, TransactionRecord, QAfterFilterCondition>
       referenceNumberEqualTo(
     String value, {
     bool caseSensitive = true,
@@ -844,6 +936,90 @@ extension TransactionRecordQueryFilter
       return query.addFilterCondition(FilterCondition.greaterThan(
         property: r'referenceNumber',
         value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<TransactionRecord, TransactionRecord, QAfterFilterCondition>
+      remainingBalanceIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNull(
+        property: r'remainingBalance',
+      ));
+    });
+  }
+
+  QueryBuilder<TransactionRecord, TransactionRecord, QAfterFilterCondition>
+      remainingBalanceIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNotNull(
+        property: r'remainingBalance',
+      ));
+    });
+  }
+
+  QueryBuilder<TransactionRecord, TransactionRecord, QAfterFilterCondition>
+      remainingBalanceEqualTo(
+    double? value, {
+    double epsilon = Query.epsilon,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'remainingBalance',
+        value: value,
+        epsilon: epsilon,
+      ));
+    });
+  }
+
+  QueryBuilder<TransactionRecord, TransactionRecord, QAfterFilterCondition>
+      remainingBalanceGreaterThan(
+    double? value, {
+    bool include = false,
+    double epsilon = Query.epsilon,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'remainingBalance',
+        value: value,
+        epsilon: epsilon,
+      ));
+    });
+  }
+
+  QueryBuilder<TransactionRecord, TransactionRecord, QAfterFilterCondition>
+      remainingBalanceLessThan(
+    double? value, {
+    bool include = false,
+    double epsilon = Query.epsilon,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'remainingBalance',
+        value: value,
+        epsilon: epsilon,
+      ));
+    });
+  }
+
+  QueryBuilder<TransactionRecord, TransactionRecord, QAfterFilterCondition>
+      remainingBalanceBetween(
+    double? lower,
+    double? upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+    double epsilon = Query.epsilon,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'remainingBalance',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+        epsilon: epsilon,
       ));
     });
   }
@@ -1400,6 +1576,20 @@ extension TransactionRecordQuerySortBy
   }
 
   QueryBuilder<TransactionRecord, TransactionRecord, QAfterSortBy>
+      sortByRecordedAt() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'recordedAt', Sort.asc);
+    });
+  }
+
+  QueryBuilder<TransactionRecord, TransactionRecord, QAfterSortBy>
+      sortByRecordedAtDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'recordedAt', Sort.desc);
+    });
+  }
+
+  QueryBuilder<TransactionRecord, TransactionRecord, QAfterSortBy>
       sortByReferenceNumber() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'referenceNumber', Sort.asc);
@@ -1410,6 +1600,20 @@ extension TransactionRecordQuerySortBy
       sortByReferenceNumberDesc() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'referenceNumber', Sort.desc);
+    });
+  }
+
+  QueryBuilder<TransactionRecord, TransactionRecord, QAfterSortBy>
+      sortByRemainingBalance() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'remainingBalance', Sort.asc);
+    });
+  }
+
+  QueryBuilder<TransactionRecord, TransactionRecord, QAfterSortBy>
+      sortByRemainingBalanceDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'remainingBalance', Sort.desc);
     });
   }
 
@@ -1528,6 +1732,20 @@ extension TransactionRecordQuerySortThenBy
   }
 
   QueryBuilder<TransactionRecord, TransactionRecord, QAfterSortBy>
+      thenByRecordedAt() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'recordedAt', Sort.asc);
+    });
+  }
+
+  QueryBuilder<TransactionRecord, TransactionRecord, QAfterSortBy>
+      thenByRecordedAtDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'recordedAt', Sort.desc);
+    });
+  }
+
+  QueryBuilder<TransactionRecord, TransactionRecord, QAfterSortBy>
       thenByReferenceNumber() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'referenceNumber', Sort.asc);
@@ -1538,6 +1756,20 @@ extension TransactionRecordQuerySortThenBy
       thenByReferenceNumberDesc() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'referenceNumber', Sort.desc);
+    });
+  }
+
+  QueryBuilder<TransactionRecord, TransactionRecord, QAfterSortBy>
+      thenByRemainingBalance() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'remainingBalance', Sort.asc);
+    });
+  }
+
+  QueryBuilder<TransactionRecord, TransactionRecord, QAfterSortBy>
+      thenByRemainingBalanceDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'remainingBalance', Sort.desc);
     });
   }
 
@@ -1622,10 +1854,24 @@ extension TransactionRecordQueryWhereDistinct
   }
 
   QueryBuilder<TransactionRecord, TransactionRecord, QDistinct>
+      distinctByRecordedAt() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'recordedAt');
+    });
+  }
+
+  QueryBuilder<TransactionRecord, TransactionRecord, QDistinct>
       distinctByReferenceNumber({bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
       return query.addDistinctBy(r'referenceNumber',
           caseSensitive: caseSensitive);
+    });
+  }
+
+  QueryBuilder<TransactionRecord, TransactionRecord, QDistinct>
+      distinctByRemainingBalance() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'remainingBalance');
     });
   }
 
@@ -1686,10 +1932,24 @@ extension TransactionRecordQueryProperty
     });
   }
 
+  QueryBuilder<TransactionRecord, DateTime?, QQueryOperations>
+      recordedAtProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'recordedAt');
+    });
+  }
+
   QueryBuilder<TransactionRecord, String, QQueryOperations>
       referenceNumberProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'referenceNumber');
+    });
+  }
+
+  QueryBuilder<TransactionRecord, double?, QQueryOperations>
+      remainingBalanceProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'remainingBalance');
     });
   }
 

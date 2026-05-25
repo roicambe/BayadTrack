@@ -46,6 +46,12 @@ dependencies:
   intl: ^0.20.2               # date & currency formatting (₱ symbol)
   google_fonts: ^6.2.1        # Inter font family
 
+  # Recording Center — OCR, gallery picker, share-sheet capture
+  google_mlkit_text_recognition: ^0.13.1  # on-device OCR (no internet needed)
+  image_picker: ^1.1.2                    # gallery/camera image picker
+  flutter_sharing_intent: ^2.0.4          # receives shared images/text from GCash
+  fl_chart: ^1.2.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
