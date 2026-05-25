@@ -738,6 +738,7 @@ class _TrendChartCard extends StatelessWidget {
                   LineChartBarData(
                     spots: gcashSpots,
                     isCurved: true,
+                    preventCurveOverShooting: true,
                     color: AppColors.gcash,
                     barWidth: 4,
                     isStrokeCapRound: true,
@@ -751,6 +752,7 @@ class _TrendChartCard extends StatelessWidget {
                   LineChartBarData(
                     spots: mayaSpots,
                     isCurved: true,
+                    preventCurveOverShooting: true,
                     color: AppColors.maya,
                     barWidth: 4,
                     isStrokeCapRound: true,

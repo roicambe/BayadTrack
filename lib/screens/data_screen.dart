@@ -1301,16 +1301,6 @@ class _PasteTextSheetState extends State<_PasteTextSheet> {
       final has = _controller.text.trim().isNotEmpty;
       if (has != _hasText) setState(() => _hasText = has);
     });
-    _tryAutoPaste();
-  }
-
-  Future<void> _tryAutoPaste() async {
-    try {
-      final data = await Clipboard.getData(Clipboard.kTextPlain);
-      if (data?.text != null && data!.text!.trim().isNotEmpty) {
-        _controller.text = data.text!;
-      }
-    } catch (_) {}
   }
 
   @override
