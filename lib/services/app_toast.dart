@@ -20,52 +20,54 @@ abstract final class AppToast {
   // ── Public convenience constructors ────────────────────────────────────────
 
   static void success(BuildContext context, String message) => _show(
-        context,
-        message: message,
-        icon:    Icons.check_circle_rounded,
-        color:   const Color(0xFF2E7D32),
-      );
+    context,
+    message: message,
+    icon: Icons.check_circle_rounded,
+    color: const Color(0xFF2E7D32),
+  );
 
   static void error(BuildContext context, String message) => _show(
-        context,
-        message: message,
-        icon:    Icons.error_rounded,
-        color:   const Color(0xFFC62828),
-      );
+    context,
+    message: message,
+    icon: Icons.error_rounded,
+    color: const Color(0xFFC62828),
+  );
 
   static void warning(BuildContext context, String message) => _show(
-        context,
-        message: message,
-        icon:    Icons.warning_rounded,
-        color:   const Color(0xFFFFA000),
-      );
+    context,
+    message: message,
+    icon: Icons.warning_rounded,
+    color: const Color(0xFFFFA000),
+  );
 
   static void info(BuildContext context, String message) => _show(
-        context,
-        message: message,
-        icon:    Icons.info_rounded,
-        color:   const Color(0xFF1565C0),
-      );
+    context,
+    message: message,
+    icon: Icons.info_rounded,
+    color: const Color(0xFF1565C0),
+  );
 
   // ── Internal renderer ──────────────────────────────────────────────────────
 
   static void _show(
     BuildContext context, {
-    required String   message,
+    required String message,
     required IconData icon,
-    required Color    color,
-    Duration duration = const Duration(seconds: 3),
+    required Color color,
+    Duration duration = const Duration(milliseconds: 1500),
   }) {
     ScaffoldMessenger.of(context)
       ..clearSnackBars()
       ..showSnackBar(
         SnackBar(
-          behavior:        SnackBarBehavior.floating,
-          margin:          const EdgeInsets.fromLTRB(16, 0, 16, 105),
-          padding:         const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
-          shape:           RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          behavior: SnackBarBehavior.floating,
+          margin: const EdgeInsets.fromLTRB(16, 0, 16, 105),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+          ),
           backgroundColor: color,
-          duration:        duration,
+          duration: duration,
           content: Row(
             children: [
               Icon(icon, color: Colors.white, size: 20),
@@ -74,9 +76,9 @@ abstract final class AppToast {
                 child: Text(
                   message,
                   style: const TextStyle(
-                    color:      Colors.white,
+                    color: Colors.white,
                     fontWeight: FontWeight.w500,
-                    fontSize:   14,
+                    fontSize: 14,
                   ),
                 ),
               ),

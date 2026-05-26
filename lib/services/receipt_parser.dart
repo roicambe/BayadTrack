@@ -32,6 +32,9 @@ class ParsedReceipt {
   /// Wallet remaining balance if visible (null if not found)
   final double? remainingBalance;
 
+  /// Service fee if applicable (null if not found)
+  final double? fee;
+
   const ParsedReceipt({
     required this.rawText,
     required this.platform,
@@ -42,6 +45,7 @@ class ParsedReceipt {
     this.phoneNumber,
     this.transactionDate,
     this.remainingBalance,
+    this.fee,
   });
 
   /// True if the minimum required fields (amount + reference) were found.
@@ -188,11 +192,11 @@ class ReceiptParser {
   // ── Person name extraction ───────────────────────────────────────────────
   // Supports masked names like JO***A T. or JO•••A T.
   static final _nameRe = RegExp(
-    r'\b([A-Z][A-Z*•●]{2,}\s+(?:[A-Z][A-Z*•●]*\.?\s*)+)',
+    r'\b([A-Z][A-Z*•●·\.\-]{2,}\s+(?:[A-Z][A-Z*•●·\.\-]*\.?\s*)+)',
   );
 
   static final _toFromRe = RegExp(
-    r'(?:to|from|send to|sent to|recipient)[:\s]+([A-Za-z][A-Za-z *\.•●]{3,40})',
+    r'(?:to|from|send to|sent to|recipient)[:\s]+([A-Za-z][A-Za-z *\.•●·\-]{3,40})',
     caseSensitive: false,
   );
 
@@ -246,20 +250,22 @@ class ReceiptParser {
 
   /// Fixes common OCR errors in masked names (e.g. converting "JO•oA" to "JO••A")
   static String _cleanMaskedName(String name) {
-    if (name.contains(RegExp(r'[*•●]'))) {
-      var cleaned = name;
-      // Repeatedly replace lowercase 'o' or zero '0' that are adjacent to a masking bullet
-      int prevLen = 0;
-      while (cleaned.length != prevLen) {
-        prevLen = cleaned.length;
-        cleaned = cleaned.replaceAllMapped(RegExp(r'([*•●])[o0]'), (m) => '${m.group(1)}•');
-        cleaned = cleaned.replaceAllMapped(RegExp(r'[o0]([*•●])'), (m) => '•${m.group(1)}');
-      }
-      // Unify all masking characters into a bullet point for consistency
-      cleaned = cleaned.replaceAll(RegExp(r'[*●]'), '•');
-      return cleaned;
-    }
-    return name;
+    var cleaned = name;
+    
+    // Replace all masking characters (including common OCR misrecognitions like commas, quotes, degrees, o, 0)
+    // situated strictly between uppercase letters with the equivalent number of standard bullets.
+    cleaned = cleaned.replaceAllMapped(
+      RegExp(r'([A-Z])([*•●·\.\-\,\x27`°o0]+)([A-Z])'), 
+      (m) => '${m.group(1)}${'•' * m.group(2)!.length}${m.group(3)}'
+    );
+    
+    // Unify any other stray stand-alone masking characters (except trailing period in initials like "T.")
+    cleaned = cleaned.replaceAllMapped(
+      RegExp(r'\b([A-Z])([*●·\-]+)\b'),
+      (m) => '${m.group(1)}${'•' * m.group(2)!.length}'
+    );
+    
+    return cleaned;
   }
 
   // ── Remaining balance extraction ──────────────────────────────────────────

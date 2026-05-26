@@ -24,9 +24,116 @@ class MainShell extends StatefulWidget {
   State<MainShell> createState() => _MainShellState();
 }
 
+class _TabTransitionSwitcher extends StatefulWidget {
+  final int selectedIndex;
+  final List<Widget> children;
+
+  const _TabTransitionSwitcher({
+    super.key,
+    required this.selectedIndex,
+    required this.children,
+  });
+
+  @override
+  State<_TabTransitionSwitcher> createState() => _TabTransitionSwitcherState();
+}
+
+class _TabTransitionSwitcherState extends State<_TabTransitionSwitcher> with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<Offset> _slideInAnimation;
+  late Animation<Offset> _slideOutAnimation;
+  
+  late int _currentIndex;
+  int? _previousIndex;
+
+  @override
+  void initState() {
+    super.initState();
+    _currentIndex = widget.selectedIndex;
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 300),
+    );
+    // Initialize animations so they are not null on first build (even though value is 1.0)
+    _slideInAnimation = const AlwaysStoppedAnimation(Offset.zero);
+    _slideOutAnimation = const AlwaysStoppedAnimation(Offset.zero);
+    _controller.value = 1.0;
+  }
+
+  @override
+  void didUpdateWidget(_TabTransitionSwitcher oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.selectedIndex != _currentIndex) {
+      _previousIndex = _currentIndex;
+      final bool isMovingRight = widget.selectedIndex > _currentIndex;
+      _currentIndex = widget.selectedIndex;
+
+      _slideInAnimation = Tween<Offset>(
+        begin: Offset(isMovingRight ? 1.0 : -1.0, 0.0),
+        end: Offset.zero,
+      ).animate(CurvedAnimation(
+        parent: _controller,
+        curve: Curves.easeOutCubic,
+      ));
+
+      _slideOutAnimation = Tween<Offset>(
+        begin: Offset.zero,
+        end: Offset(isMovingRight ? -1.0 : 1.0, 0.0),
+      ).animate(CurvedAnimation(
+        parent: _controller,
+        curve: Curves.easeOutCubic,
+      ));
+
+      _controller.forward(from: 0.0);
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, child) {
+        return Stack(
+          children: List.generate(widget.children.length, (index) {
+            final isCurrent = index == _currentIndex;
+            final isPrevious = index == _previousIndex;
+            final isAnimating = _controller.isAnimating;
+
+            if (isCurrent) {
+              return SlideTransition(
+                position: isAnimating ? _slideInAnimation : const AlwaysStoppedAnimation(Offset.zero),
+                child: widget.children[index],
+              );
+            } else if (isPrevious && isAnimating) {
+              return SlideTransition(
+                position: _slideOutAnimation,
+                child: widget.children[index],
+              );
+            } else {
+              return Offstage(
+                offstage: true,
+                // Still use a TickerMode to disable animations on offstage widgets
+                child: TickerMode(
+                  enabled: false,
+                  child: widget.children[index],
+                ),
+              );
+            }
+          }),
+        );
+      },
+    );
+  }
+}
+
 class _MainShellState extends State<MainShell> {
   int _selectedIndex = 0;
-  late final PageController _pageController;
 
   // GlobalKey so we can call DataScreenState methods from here
   final _dataScreenKey = GlobalKey<DataScreenState>();
@@ -40,7 +147,6 @@ class _MainShellState extends State<MainShell> {
   @override
   void initState() {
     super.initState();
-    _pageController = PageController(initialPage: _selectedIndex);
 
     _screens = [
       const HomeScreen(),
@@ -93,8 +199,8 @@ class _MainShellState extends State<MainShell> {
   // ── Tab Switching ─────────────────────────────────────────────────────────
 
   void _switchToTab(int index) {
+    if (_selectedIndex == index) return;
     setState(() => _selectedIndex = index);
-    _pageController.jumpToPage(index);
   }
 
   // ── Lifecycle ─────────────────────────────────────────────────────────────
@@ -102,7 +208,6 @@ class _MainShellState extends State<MainShell> {
   @override
   void dispose() {
     _sharingSubscription?.cancel();
-    _pageController.dispose();
     super.dispose();
   }
 
@@ -119,23 +224,23 @@ class _MainShellState extends State<MainShell> {
         if (shouldExit) SystemNavigator.pop();
       },
       child: Scaffold(
+      resizeToAvoidBottomInset: false,
       extendBody: true, // allows body to scroll behind the floating nav bar
 
       body: Stack(
         children: [
-          PageView(
-            controller: _pageController,
-            physics: const NeverScrollableScrollPhysics(),
-            onPageChanged: (index) {
-              setState(() => _selectedIndex = index);
-            },
-            children: _screens,
+          Positioned.fill(
+            child: _TabTransitionSwitcher(
+              selectedIndex: _selectedIndex,
+              children: _screens,
+            ),
           ),
           Positioned(
             left: 0,
             right: 0,
             bottom: 0,
             child: SafeArea(
+              maintainBottomViewPadding: true,
               child: Padding(
                 padding: const EdgeInsets.only(left: 32, right: 32, bottom: 20),
                 child: Container(
@@ -155,11 +260,7 @@ class _MainShellState extends State<MainShell> {
                       height: 65,
                       selectedIndex: _selectedIndex,
                       onDestinationSelected: (index) {
-                        _pageController.animateToPage(
-                          index,
-                          duration: const Duration(milliseconds: 300),
-                          curve: Curves.easeOutCubic,
-                        );
+                        _switchToTab(index);
                       },
                       labelBehavior: NavigationDestinationLabelBehavior.onlyShowSelected,
                       animationDuration: const Duration(milliseconds: 250),

@@ -17,6 +17,9 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   final _db = IsarService();
   ChartPeriod _selectedPeriod = ChartPeriod.week;
+  ChartPeriod _insightsPeriod = ChartPeriod.week;
+  Platform _selectedEarningsPlatform = Platform.gcash;
+  int _activeInsightTab = 0;
 
   // Masking helper matching global patterns
   String _maskName(String name) {
@@ -86,6 +89,12 @@ class _HomeScreenState extends State<HomeScreen> {
 
           // 2. Generate Chart & Insights Data based on Selected Period
           final now = DateTime.now();
+          final hour = now.hour;
+          final greeting = hour < 12
+              ? 'Good Morning, Mommy!'
+              : hour < 18
+                  ? 'Good Afternoon, Mommy!'
+                  : 'Good Evening, Mommy!';
           DateTime periodStart;
           switch (_selectedPeriod) {
             case ChartPeriod.week:
@@ -99,31 +108,62 @@ class _HomeScreenState extends State<HomeScreen> {
               break;
           }
 
-          // Filter transactions for insights
-          final periodTransactions = transactions
-              .where((t) => t.timestamp.isAfter(periodStart) || t.timestamp.isAtSameMomentAs(periodStart))
+          // Calculate insightsPeriodStart based on _insightsPeriod
+          DateTime insightsPeriodStart;
+          switch (_insightsPeriod) {
+            case ChartPeriod.week:
+              insightsPeriodStart = DateTime(now.year, now.month, now.day).subtract(const Duration(days: 6));
+              break;
+            case ChartPeriod.month:
+              insightsPeriodStart = DateTime(now.year, now.month, now.day).subtract(const Duration(days: 29));
+              break;
+            case ChartPeriod.year:
+              insightsPeriodStart = DateTime(now.year, now.month, 1).subtract(const Duration(days: 365));
+              break;
+          }
+
+          final insightsTransactions = transactions
+              .where((t) => t.timestamp.isAfter(insightsPeriodStart) || t.timestamp.isAtSameMomentAs(insightsPeriodStart))
               .toList();
 
-          // Insights Calculation: Most Active Customer
-          final customerCounts = <String, int>{};
-          for (final t in periodTransactions) {
+          // Insights Calculations for Top Customers using insightsTransactions
+          final activeCounts = <String, int>{};
+          final highestValue = <String, double>{};
+          final topServiceFees = <String, double>{};
+
+          for (final t in insightsTransactions) {
             final name = t.senderName?.trim() ?? '';
             if (name.isNotEmpty && name.toLowerCase() != 'unknown') {
-              customerCounts[name] = (customerCounts[name] ?? 0) + 1;
+              activeCounts[name] = (activeCounts[name] ?? 0) + 1;
+              highestValue[name] = (highestValue[name] ?? 0.0) + t.amount;
+              topServiceFees[name] = (topServiceFees[name] ?? 0.0) + (t.fee ?? 0.0);
             }
           }
-          List<MapEntry<String, int>> topCustomers = [];
-          if (customerCounts.isNotEmpty) {
-            topCustomers = customerCounts.entries.toList()
+
+          List<MapEntry<String, int>> topActive = [];
+          if (activeCounts.isNotEmpty) {
+            topActive = activeCounts.entries.toList()
               ..sort((a, b) => b.value.compareTo(a.value));
-            if (topCustomers.length > 10) {
-              topCustomers = topCustomers.sublist(0, 10);
-            }
+            if (topActive.length > 10) topActive = topActive.sublist(0, 10);
+          }
+
+          List<MapEntry<String, double>> topValue = [];
+          if (highestValue.isNotEmpty) {
+            topValue = highestValue.entries.toList()
+              ..sort((a, b) => b.value.compareTo(a.value));
+            if (topValue.length > 10) topValue = topValue.sublist(0, 10);
+          }
+
+          List<MapEntry<String, double>> topFees = [];
+          if (topServiceFees.isNotEmpty) {
+            topFees = topServiceFees.entries.toList()
+              ..sort((a, b) => b.value.compareTo(a.value));
+            if (topFees.length > 10) topFees = topFees.sublist(0, 10);
           }
 
           // Insights Calculation: Platform Split
-          int gcashCount = periodTransactions.where((t) => t.platform == Platform.gcash).length;
-          int mayaCount = periodTransactions.where((t) => t.platform == Platform.maya).length;
+          int gcashCount = insightsTransactions.where((t) => t.platform == Platform.gcash).length;
+          int mayaCount = insightsTransactions.where((t) => t.platform == Platform.maya).length;
           int totalCount = gcashCount + mayaCount;
           double gcashPercent = totalCount > 0 ? (gcashCount / totalCount) : 0.5;
           double mayaPercent = totalCount > 0 ? (mayaCount / totalCount) : 0.5;
@@ -143,26 +183,33 @@ class _HomeScreenState extends State<HomeScreen> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Wallet Summary',
-                          style: theme.textTheme.headlineSmall?.copyWith(
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: -0.5,
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            greeting,
+                            style: theme.textTheme.headlineSmall?.copyWith(
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: -0.5,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                            maxLines: 2,
                           ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          DateFormat('EEEE, MMMM d, yyyy').format(now),
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: theme.colorScheme.onSurface.withValues(alpha: 0.55),
-                            fontWeight: FontWeight.w600,
+                          const SizedBox(height: 4),
+                          Text(
+                            DateFormat('EEEE, MMMM d, yyyy').format(now),
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: theme.colorScheme.onSurface.withValues(alpha: 0.55),
+                              fontWeight: FontWeight.w600,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                            maxLines: 1,
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
+                    const SizedBox(width: 12),
                     Container(
                       padding: const EdgeInsets.all(10),
                       decoration: BoxDecoration(
@@ -243,51 +290,97 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
                 const SizedBox(height: 28),
 
-                // ── 3. Business Insights ───────────────────────────────────────
-                const _SectionLabel('Business Insights'),
-                const SizedBox(height: 12),
+                // ── 3. Pure Earnings (Kita) Bar Chart ──────────────────────────
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(child: const _SectionLabel('Pure Earnings (Kita)')),
+                    const SizedBox(width: 8),
+                    // Platform Segmented Toggle
+                    Container(
+                      padding: const EdgeInsets.all(3),
+                      decoration: BoxDecoration(
+                        color: isDark ? Colors.white.withValues(alpha: 0.12) : Colors.black.withValues(alpha: 0.06),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          _buildPlatformToggle(Platform.gcash, 'GCash', theme),
+                          _buildPlatformToggle(Platform.maya, 'Maya', theme),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                _EarningsBarChartCard(
+                  period: _selectedPeriod,
+                  transactions: transactions,
+                  platform: _selectedEarningsPlatform,
+                  now: now,
+                  isDark: isDark,
+                  theme: theme,
+                ),
+                const SizedBox(height: 28),
+
+                // ── 4. Business Insights ───────────────────────────────────────
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(child: const _SectionLabel('Business Insights')),
+                    const SizedBox(width: 8),
+                    // Segmented Button Toggle Selector for Insights
+                    Container(
+                      padding: const EdgeInsets.all(3),
+                      decoration: BoxDecoration(
+                        color: isDark ? Colors.white.withValues(alpha: 0.12) : Colors.black.withValues(alpha: 0.06),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          _buildInsightsPeriodToggle(ChartPeriod.week, 'Week', theme),
+                          _buildInsightsPeriodToggle(ChartPeriod.month, 'Month', theme),
+                          _buildInsightsPeriodToggle(ChartPeriod.year, 'Year', theme),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
                 Column(
                   children: [
                     _InsightItemCard(
-                      title: 'Most Active Customers (Top 10)',
-                      icon: Icons.people_alt_rounded,
+                      title: 'Top Customers Analytics',
+                      icon: Icons.analytics_rounded,
                       iconColor: Colors.purple.shade400,
                       isDark: isDark,
                       theme: theme,
-                      child: topCustomers.isEmpty
-                          ? Text(
-                              'No records yet',
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                color: theme.colorScheme.onSurface.withValues(alpha: 0.55),
-                                fontWeight: FontWeight.w600,
-                              ),
-                            )
-                          : Column(
-                              children: topCustomers.map((e) {
-                                return Padding(
-                                  padding: const EdgeInsets.only(bottom: 8.0),
-                                  child: Row(
-                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                    children: [
-                                      Text(
-                                        _maskName(e.key),
-                                        style: theme.textTheme.titleSmall?.copyWith(
-                                          fontWeight: FontWeight.w700,
-                                          color: theme.colorScheme.onSurface,
-                                        ),
-                                      ),
-                                      Text(
-                                        '${e.value} txns',
-                                        style: theme.textTheme.bodySmall?.copyWith(
-                                          color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                );
-                              }).toList(),
+                      child: Column(
+                        children: [
+                          Row(
+                            children: [
+                              _buildInsightTabButton(0, 'Most Active', Icons.people_alt_rounded),
+                              _buildInsightTabButton(1, 'Top Earnings', Icons.price_check_rounded),
+                            ],
+                          ),
+                          const SizedBox(height: 18),
+                          if (_activeInsightTab == 0) ...[
+                            _buildRankedList(
+                              topActive,
+                              valueFormatter: (val) => '$val txns',
+                              theme: theme,
                             ),
+                          ] else ...[
+                            _buildRankedList(
+                              topFees,
+                              valueFormatter: (val) => currencyFormat.format(val),
+                              theme: theme,
+                            ),
+                          ],
+                        ],
+                      ),
                     ),
                     const SizedBox(height: 12),
                     _InsightItemCard(
@@ -303,11 +396,11 @@ class _HomeScreenState extends State<HomeScreen> {
                             children: [
                               Container(width: 10, height: 10, decoration: const BoxDecoration(color: AppColors.gcash, shape: BoxShape.circle)),
                               const SizedBox(width: 6),
-                              Text('GCash ${(gcashPercent * 100).toStringAsFixed(0)}%', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.gcash)),
+                              Text('GCash ${(gcashPercent * 100).toStringAsFixed(0)}%', textScaler: TextScaler.noScaling, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.gcash)),
                               const SizedBox(width: 16),
                               Container(width: 10, height: 10, decoration: const BoxDecoration(color: AppColors.maya, shape: BoxShape.circle)),
                               const SizedBox(width: 6),
-                              Text('Maya ${(mayaPercent * 100).toStringAsFixed(0)}%', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.maya)),
+                              Text('Maya ${(mayaPercent * 100).toStringAsFixed(0)}%', textScaler: TextScaler.noScaling, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.maya)),
                             ],
                           ),
                           const SizedBox(height: 16),
@@ -354,6 +447,211 @@ class _HomeScreenState extends State<HomeScreen> {
       onTap: () {
         setState(() {
           _selectedPeriod = period;
+        });
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: isSelected ? theme.colorScheme.surface : Colors.transparent,
+          borderRadius: BorderRadius.circular(8),
+          boxShadow: isSelected
+              ? [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.05),
+                    blurRadius: 4,
+                    offset: const Offset(0, 1),
+                  ),
+                ]
+              : null,
+        ),
+        child: Text(
+          text,
+          textScaler: TextScaler.noScaling,
+          style: TextStyle(
+            color: isSelected ? theme.colorScheme.onSurface : theme.colorScheme.onSurface.withValues(alpha: 0.6),
+            fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+            fontSize: 12,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPlatformToggle(Platform platform, String text, ThemeData theme) {
+    final isSelected = _selectedEarningsPlatform == platform;
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          _selectedEarningsPlatform = platform;
+        });
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: isSelected ? theme.colorScheme.surface : Colors.transparent,
+          borderRadius: BorderRadius.circular(8),
+          boxShadow: isSelected
+              ? [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.05),
+                    blurRadius: 4,
+                    offset: const Offset(0, 1),
+                  ),
+                ]
+              : null,
+        ),
+        child: Text(
+          text,
+          style: TextStyle(
+            color: isSelected ? theme.colorScheme.onSurface : theme.colorScheme.onSurface.withValues(alpha: 0.6),
+            fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+            fontSize: 12,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInsightTabButton(int index, String label, IconData icon) {
+    final theme = Theme.of(context);
+    final isSelected = _activeInsightTab == index;
+    final activeColor = theme.colorScheme.primary;
+
+    return Expanded(
+      child: GestureDetector(
+        onTap: () {
+          setState(() {
+            _activeInsightTab = index;
+          });
+        },
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          margin: const EdgeInsets.symmetric(horizontal: 4),
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          decoration: BoxDecoration(
+            color: isSelected
+                ? activeColor.withValues(alpha: 0.12)
+                : Colors.transparent,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: isSelected ? activeColor.withValues(alpha: 0.25) : Colors.transparent,
+              width: 1,
+            ),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                icon,
+                color: isSelected ? activeColor : theme.colorScheme.onSurface.withValues(alpha: 0.45),
+                size: 18,
+              ),
+              const SizedBox(height: 4),
+              Text(
+                label,
+                textScaler: TextScaler.noScaling,
+                style: TextStyle(
+                  color: isSelected ? activeColor : theme.colorScheme.onSurface.withValues(alpha: 0.6),
+                  fontSize: 11,
+                  fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRankedList<T>(
+    List<MapEntry<String, T>> data, {
+    required String Function(T) valueFormatter,
+    required ThemeData theme,
+  }) {
+    if (data.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 24.0),
+        child: Center(
+          child: Text(
+            'No records logged for this period',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurface.withValues(alpha: 0.45),
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Column(
+      children: List.generate(data.length, (idx) {
+        final entry = data[idx];
+        final rank = idx + 1;
+
+        // Custom ranking color badges for top 3
+        Color rankColor = theme.colorScheme.onSurface.withValues(alpha: 0.35);
+        if (rank == 1) rankColor = Colors.amber.shade700;
+        if (rank == 2) rankColor = Colors.grey.shade500;
+        if (rank == 3) rankColor = Colors.brown.shade400;
+
+        return Padding(
+          padding: const EdgeInsets.symmetric(vertical: 7.0),
+          child: Row(
+            children: [
+              // Rank indicator
+              Container(
+                width: 22,
+                height: 22,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: rankColor.withValues(alpha: 0.12),
+                  shape: BoxShape.circle,
+                ),
+                child: Text(
+                  '$rank',
+                  style: TextStyle(
+                    color: rankColor,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              // Customer Name
+              Expanded(
+                child: Text(
+                  entry.key,
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: theme.colorScheme.onSurface,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              // Metric value
+              Text(
+                valueFormatter(entry.value),
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurface.withValues(alpha: 0.65),
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+        );
+      }),
+    );
+  }
+
+  Widget _buildInsightsPeriodToggle(ChartPeriod period, String text, ThemeData theme) {
+    final isSelected = _insightsPeriod == period;
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          _insightsPeriod = period;
         });
       },
       child: AnimatedContainer(
@@ -504,15 +802,20 @@ class _BalanceCard extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 4),
-          Text(
-            currencyFormat.format(balance),
-            style: theme.textTheme.titleMedium?.copyWith(
-              color: isLowBalance ? warningColor : brandColor,
-              fontWeight: FontWeight.w800,
-              fontSize: 18,
-              letterSpacing: -0.5,
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              currencyFormat.format(balance),
+              style: theme.textTheme.titleMedium?.copyWith(
+                color: isLowBalance ? warningColor : brandColor,
+                fontWeight: FontWeight.w800,
+                fontSize: 18,
+                letterSpacing: -0.5,
+              ),
+              overflow: TextOverflow.ellipsis,
+              maxLines: 1,
             ),
-            overflow: TextOverflow.ellipsis,
           ),
           const SizedBox(height: 12),
           Text(
@@ -524,6 +827,8 @@ class _BalanceCard extends StatelessWidget {
               fontSize: 10,
               fontWeight: FontWeight.w500,
             ),
+            overflow: TextOverflow.ellipsis,
+            maxLines: 1,
           ),
         ],
       ),
@@ -589,7 +894,7 @@ class _TrendChartCard extends StatelessWidget {
       // 30-day daily transactions
       for (int i = 0; i < 30; i++) {
         final targetDate = DateTime(now.year, now.month, now.day).subtract(Duration(days: 29 - i));
-        xLabels.add(targetDate.day.toString()); // e.g. 15, 16
+        xLabels.add(DateFormat('M/d').format(targetDate)); // e.g. 4/27, 5/2
 
         final dayTxns = transactions.where((t) =>
             t.timestamp.year == targetDate.year &&
@@ -687,6 +992,7 @@ class _TrendChartCard extends StatelessWidget {
                             padding: const EdgeInsets.only(top: 8.0),
                             child: Text(
                               xLabels[idx],
+                              textScaler: TextScaler.noScaling,
                               style: theme.textTheme.bodySmall?.copyWith(
                                 color: theme.colorScheme.onSurface.withValues(alpha: 0.45),
                                 fontSize: period == ChartPeriod.month ? 9 : 10,
@@ -707,6 +1013,7 @@ class _TrendChartCard extends StatelessWidget {
                         if (value == 0) {
                           return Text(
                             '₱0',
+                            textScaler: TextScaler.noScaling,
                             style: TextStyle(
                               color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
                               fontSize: 9,
@@ -717,6 +1024,7 @@ class _TrendChartCard extends StatelessWidget {
                         String formatted = value >= 1000 ? '₱${(value / 1000).toStringAsFixed(0)}k' : '₱${value.toStringAsFixed(0)}';
                         return Text(
                           formatted,
+                          textScaler: TextScaler.noScaling,
                           style: TextStyle(
                             color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
                             fontSize: 9,
@@ -809,6 +1117,7 @@ class _TrendChartCard extends StatelessWidget {
         const SizedBox(width: 6),
         Text(
           text,
+          textScaler: TextScaler.noScaling,
           style: TextStyle(
             color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
             fontSize: 11,
@@ -890,3 +1199,253 @@ class _InsightItemCard extends StatelessWidget {
     );
   }
 }
+
+/// Premium Service Fee Pure Earnings Bar Chart Card using fl_chart
+class _EarningsBarChartCard extends StatelessWidget {
+  final ChartPeriod period;
+  final List<TransactionRecord> transactions;
+  final Platform platform;
+  final DateTime now;
+  final bool isDark;
+  final ThemeData theme;
+
+  const _EarningsBarChartCard({
+    required this.period,
+    required this.transactions,
+    required this.platform,
+    required this.now,
+    required this.isDark,
+    required this.theme,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final color = platform == Platform.maya ? AppColors.maya : AppColors.gcash;
+    final List<String> xLabels = [];
+
+    int dataCount = 7;
+    if (period == ChartPeriod.week) {
+      dataCount = 7;
+    } else if (period == ChartPeriod.month) {
+      dataCount = 30;
+    } else {
+      dataCount = 12;
+    }
+
+    final List<double> earningsYVals = List.filled(dataCount, 0.0);
+
+    if (period == ChartPeriod.week) {
+      for (int i = 0; i < 7; i++) {
+        final targetDate = DateTime(now.year, now.month, now.day).subtract(Duration(days: 6 - i));
+        xLabels.add(DateFormat('E').format(targetDate));
+
+        final dayTxns = transactions.where((t) =>
+            t.platform == platform &&
+            t.timestamp.year == targetDate.year &&
+            t.timestamp.month == targetDate.month &&
+            t.timestamp.day == targetDate.day).toList();
+
+        earningsYVals[i] = dayTxns.fold(0.0, (sum, t) => sum + (t.fee ?? 0.0));
+      }
+    } else if (period == ChartPeriod.month) {
+      for (int i = 0; i < 30; i++) {
+        final targetDate = DateTime(now.year, now.month, now.day).subtract(Duration(days: 29 - i));
+        xLabels.add(DateFormat('M/d').format(targetDate));
+
+        final dayTxns = transactions.where((t) =>
+            t.platform == platform &&
+            t.timestamp.year == targetDate.year &&
+            t.timestamp.month == targetDate.month &&
+            t.timestamp.day == targetDate.day).toList();
+
+        earningsYVals[i] = dayTxns.fold(0.0, (sum, t) => sum + (t.fee ?? 0.0));
+      }
+    } else {
+      for (int i = 0; i < 12; i++) {
+        final targetMonth = DateTime(now.year, now.month, 1).subtract(Duration(days: (11 - i) * 30));
+        xLabels.add(DateFormat('MMM').format(targetMonth));
+
+        final monthTxns = transactions.where((t) =>
+            t.platform == platform &&
+            t.timestamp.year == targetMonth.year &&
+            t.timestamp.month == targetMonth.month).toList();
+
+        earningsYVals[i] = monthTxns.fold(0.0, (sum, t) => sum + (t.fee ?? 0.0));
+      }
+    }
+
+    double maxVal = 0.0;
+    double totalEarnings = 0.0;
+    for (final v in earningsYVals) {
+      totalEarnings += v;
+      if (v > maxVal) maxVal = v;
+    }
+    if (maxVal == 0) maxVal = 100.0;
+    maxVal = (maxVal * 1.15);
+
+    final barGroups = List.generate(dataCount, (i) {
+      return BarChartGroupData(
+        x: i,
+        barRods: [
+          BarChartRodData(
+            toY: earningsYVals[i],
+            color: color,
+            width: period == ChartPeriod.month ? 4.5 : 14,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
+            backDrawRodData: BackgroundBarChartRodData(
+              show: true,
+              toY: maxVal,
+              color: color.withValues(alpha: 0.06),
+            ),
+          ),
+        ],
+      );
+    });
+
+    final currencyFormat = NumberFormat.currency(
+      locale: 'en_PH',
+      symbol: '₱',
+      decimalDigits: 2,
+    );
+
+    return Container(
+      height: 290,
+      padding: const EdgeInsets.fromLTRB(10, 20, 20, 14),
+      decoration: BoxDecoration(
+        color: isDark ? AppColors.darkCard : AppColors.lightCard,
+        borderRadius: BorderRadius.circular(24),
+        border: isDark ? Border.all(color: Colors.white.withValues(alpha: 0.08), width: 1) : null,
+        boxShadow: isDark
+            ? null
+            : [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.04),
+                  blurRadius: 16,
+                  offset: const Offset(0, 6),
+                ),
+              ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12.0),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Expanded(
+                  child: Text(
+                    'Total ${platform == Platform.gcash ? "GCash" : "Maya"} Kita',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      fontWeight: FontWeight.w700,
+                      color: theme.colorScheme.onSurface.withValues(alpha: 0.50),
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  currencyFormat.format(totalEarnings),
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    color: color,
+                    fontWeight: FontWeight.w800,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          Expanded(
+            child: BarChart(
+              BarChartData(
+                gridData: const FlGridData(show: false),
+                titlesData: FlTitlesData(
+                  show: true,
+                  rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                  topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                  bottomTitles: AxisTitles(
+                    sideTitles: SideTitles(
+                      showTitles: true,
+                      reservedSize: 32,
+                      interval: period == ChartPeriod.month ? 5 : 1,
+                      getTitlesWidget: (value, meta) {
+                        final idx = value.toInt();
+                        if (period == ChartPeriod.month && idx % 5 != 0 && idx != xLabels.length - 1) {
+                          return const SizedBox.shrink();
+                        }
+                        if (idx >= 0 && idx < xLabels.length) {
+                          return Padding(
+                            padding: const EdgeInsets.only(top: 8.0),
+                            child: Text(
+                              xLabels[idx],
+                              textScaler: TextScaler.noScaling,
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: theme.colorScheme.onSurface.withValues(alpha: 0.45),
+                                fontSize: period == ChartPeriod.month ? 9 : 10,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          );
+                        }
+                        return const SizedBox.shrink();
+                      },
+                    ),
+                  ),
+                  leftTitles: AxisTitles(
+                    sideTitles: SideTitles(
+                      showTitles: true,
+                      reservedSize: 42,
+                      getTitlesWidget: (value, meta) {
+                        if (value == 0) {
+                          return Text(
+                            '₱0',
+                            textScaler: TextScaler.noScaling,
+                            style: TextStyle(
+                              color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
+                              fontSize: 9,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          );
+                        }
+                        return Text(
+                          '₱${value.toStringAsFixed(0)}',
+                          textScaler: TextScaler.noScaling,
+                          style: TextStyle(
+                            color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
+                            fontSize: 9,
+                            fontWeight: FontWeight.w600,
+                          ),
+                          textAlign: TextAlign.right,
+                        );
+                      },
+                    ),
+                  ),
+                ),
+                borderData: FlBorderData(show: false),
+                barGroups: barGroups,
+                minY: 0,
+                maxY: maxVal,
+                barTouchData: BarTouchData(
+                  touchTooltipData: BarTouchTooltipData(
+                    getTooltipColor: (group) => theme.colorScheme.surfaceContainerHighest,
+                    getTooltipItem: (group, groupIndex, rod, rodIndex) {
+                      return BarTooltipItem(
+                        '₱${rod.toY.toStringAsFixed(2)}',
+                        theme.textTheme.bodySmall!.copyWith(
+                          color: color,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+

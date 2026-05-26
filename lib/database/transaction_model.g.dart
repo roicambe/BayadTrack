@@ -22,49 +22,54 @@ const TransactionRecordSchema = CollectionSchema(
       name: r'amount',
       type: IsarType.double,
     ),
-    r'notes': PropertySchema(
+    r'fee': PropertySchema(
       id: 1,
+      name: r'fee',
+      type: IsarType.double,
+    ),
+    r'notes': PropertySchema(
+      id: 2,
       name: r'notes',
       type: IsarType.string,
     ),
     r'platform': PropertySchema(
-      id: 2,
+      id: 3,
       name: r'platform',
       type: IsarType.string,
       enumMap: _TransactionRecordplatformEnumValueMap,
     ),
     r'recordedAt': PropertySchema(
-      id: 3,
+      id: 4,
       name: r'recordedAt',
       type: IsarType.dateTime,
     ),
     r'referenceNumber': PropertySchema(
-      id: 4,
+      id: 5,
       name: r'referenceNumber',
       type: IsarType.string,
     ),
     r'remainingBalance': PropertySchema(
-      id: 5,
+      id: 6,
       name: r'remainingBalance',
       type: IsarType.double,
     ),
     r'senderName': PropertySchema(
-      id: 6,
+      id: 7,
       name: r'senderName',
       type: IsarType.string,
     ),
     r'senderNumber': PropertySchema(
-      id: 7,
+      id: 8,
       name: r'senderNumber',
       type: IsarType.string,
     ),
     r'timestamp': PropertySchema(
-      id: 8,
+      id: 9,
       name: r'timestamp',
       type: IsarType.dateTime,
     ),
     r'transactionType': PropertySchema(
-      id: 9,
+      id: 10,
       name: r'transactionType',
       type: IsarType.string,
       enumMap: _TransactionRecordtransactionTypeEnumValueMap,
@@ -75,7 +80,21 @@ const TransactionRecordSchema = CollectionSchema(
   deserialize: _transactionRecordDeserialize,
   deserializeProp: _transactionRecordDeserializeProp,
   idName: r'id',
-  indexes: {},
+  indexes: {
+    r'senderNumber': IndexSchema(
+      id: -6822599329568614336,
+      name: r'senderNumber',
+      unique: false,
+      replace: false,
+      properties: [
+        IndexPropertySchema(
+          name: r'senderNumber',
+          type: IndexType.hash,
+          caseSensitive: true,
+        )
+      ],
+    )
+  },
   links: {},
   embeddedSchemas: {},
   getId: _transactionRecordGetId,
@@ -121,15 +140,16 @@ void _transactionRecordSerialize(
   Map<Type, List<int>> allOffsets,
 ) {
   writer.writeDouble(offsets[0], object.amount);
-  writer.writeString(offsets[1], object.notes);
-  writer.writeString(offsets[2], object.platform.name);
-  writer.writeDateTime(offsets[3], object.recordedAt);
-  writer.writeString(offsets[4], object.referenceNumber);
-  writer.writeDouble(offsets[5], object.remainingBalance);
-  writer.writeString(offsets[6], object.senderName);
-  writer.writeString(offsets[7], object.senderNumber);
-  writer.writeDateTime(offsets[8], object.timestamp);
-  writer.writeString(offsets[9], object.transactionType.name);
+  writer.writeDouble(offsets[1], object.fee);
+  writer.writeString(offsets[2], object.notes);
+  writer.writeString(offsets[3], object.platform.name);
+  writer.writeDateTime(offsets[4], object.recordedAt);
+  writer.writeString(offsets[5], object.referenceNumber);
+  writer.writeDouble(offsets[6], object.remainingBalance);
+  writer.writeString(offsets[7], object.senderName);
+  writer.writeString(offsets[8], object.senderNumber);
+  writer.writeDateTime(offsets[9], object.timestamp);
+  writer.writeString(offsets[10], object.transactionType.name);
 }
 
 TransactionRecord _transactionRecordDeserialize(
@@ -140,19 +160,20 @@ TransactionRecord _transactionRecordDeserialize(
 ) {
   final object = TransactionRecord();
   object.amount = reader.readDouble(offsets[0]);
+  object.fee = reader.readDoubleOrNull(offsets[1]);
   object.id = id;
-  object.notes = reader.readStringOrNull(offsets[1]);
+  object.notes = reader.readStringOrNull(offsets[2]);
   object.platform = _TransactionRecordplatformValueEnumMap[
-          reader.readStringOrNull(offsets[2])] ??
+          reader.readStringOrNull(offsets[3])] ??
       Platform.gcash;
-  object.recordedAt = reader.readDateTimeOrNull(offsets[3]);
-  object.referenceNumber = reader.readString(offsets[4]);
-  object.remainingBalance = reader.readDoubleOrNull(offsets[5]);
-  object.senderName = reader.readStringOrNull(offsets[6]);
-  object.senderNumber = reader.readStringOrNull(offsets[7]);
-  object.timestamp = reader.readDateTime(offsets[8]);
+  object.recordedAt = reader.readDateTimeOrNull(offsets[4]);
+  object.referenceNumber = reader.readString(offsets[5]);
+  object.remainingBalance = reader.readDoubleOrNull(offsets[6]);
+  object.senderName = reader.readStringOrNull(offsets[7]);
+  object.senderNumber = reader.readStringOrNull(offsets[8]);
+  object.timestamp = reader.readDateTime(offsets[9]);
   object.transactionType = _TransactionRecordtransactionTypeValueEnumMap[
-          reader.readStringOrNull(offsets[9])] ??
+          reader.readStringOrNull(offsets[10])] ??
       TransactionType.sent;
   return object;
 }
@@ -167,24 +188,26 @@ P _transactionRecordDeserializeProp<P>(
     case 0:
       return (reader.readDouble(offset)) as P;
     case 1:
-      return (reader.readStringOrNull(offset)) as P;
+      return (reader.readDoubleOrNull(offset)) as P;
     case 2:
+      return (reader.readStringOrNull(offset)) as P;
+    case 3:
       return (_TransactionRecordplatformValueEnumMap[
               reader.readStringOrNull(offset)] ??
           Platform.gcash) as P;
-    case 3:
-      return (reader.readDateTimeOrNull(offset)) as P;
     case 4:
-      return (reader.readString(offset)) as P;
+      return (reader.readDateTimeOrNull(offset)) as P;
     case 5:
-      return (reader.readDoubleOrNull(offset)) as P;
+      return (reader.readString(offset)) as P;
     case 6:
-      return (reader.readStringOrNull(offset)) as P;
+      return (reader.readDoubleOrNull(offset)) as P;
     case 7:
       return (reader.readStringOrNull(offset)) as P;
     case 8:
-      return (reader.readDateTime(offset)) as P;
+      return (reader.readStringOrNull(offset)) as P;
     case 9:
+      return (reader.readDateTime(offset)) as P;
+    case 10:
       return (_TransactionRecordtransactionTypeValueEnumMap[
               reader.readStringOrNull(offset)] ??
           TransactionType.sent) as P;
@@ -314,6 +337,73 @@ extension TransactionRecordQueryWhere
       ));
     });
   }
+
+  QueryBuilder<TransactionRecord, TransactionRecord, QAfterWhereClause>
+      senderNumberIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.equalTo(
+        indexName: r'senderNumber',
+        value: [null],
+      ));
+    });
+  }
+
+  QueryBuilder<TransactionRecord, TransactionRecord, QAfterWhereClause>
+      senderNumberIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.between(
+        indexName: r'senderNumber',
+        lower: [null],
+        includeLower: false,
+        upper: [],
+      ));
+    });
+  }
+
+  QueryBuilder<TransactionRecord, TransactionRecord, QAfterWhereClause>
+      senderNumberEqualTo(String? senderNumber) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.equalTo(
+        indexName: r'senderNumber',
+        value: [senderNumber],
+      ));
+    });
+  }
+
+  QueryBuilder<TransactionRecord, TransactionRecord, QAfterWhereClause>
+      senderNumberNotEqualTo(String? senderNumber) {
+    return QueryBuilder.apply(this, (query) {
+      if (query.whereSort == Sort.asc) {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'senderNumber',
+              lower: [],
+              upper: [senderNumber],
+              includeUpper: false,
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'senderNumber',
+              lower: [senderNumber],
+              includeLower: false,
+              upper: [],
+            ));
+      } else {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'senderNumber',
+              lower: [senderNumber],
+              includeLower: false,
+              upper: [],
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'senderNumber',
+              lower: [],
+              upper: [senderNumber],
+              includeUpper: false,
+            ));
+      }
+    });
+  }
 }
 
 extension TransactionRecordQueryFilter
@@ -375,6 +465,90 @@ extension TransactionRecordQueryFilter
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.between(
         property: r'amount',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+        epsilon: epsilon,
+      ));
+    });
+  }
+
+  QueryBuilder<TransactionRecord, TransactionRecord, QAfterFilterCondition>
+      feeIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNull(
+        property: r'fee',
+      ));
+    });
+  }
+
+  QueryBuilder<TransactionRecord, TransactionRecord, QAfterFilterCondition>
+      feeIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNotNull(
+        property: r'fee',
+      ));
+    });
+  }
+
+  QueryBuilder<TransactionRecord, TransactionRecord, QAfterFilterCondition>
+      feeEqualTo(
+    double? value, {
+    double epsilon = Query.epsilon,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'fee',
+        value: value,
+        epsilon: epsilon,
+      ));
+    });
+  }
+
+  QueryBuilder<TransactionRecord, TransactionRecord, QAfterFilterCondition>
+      feeGreaterThan(
+    double? value, {
+    bool include = false,
+    double epsilon = Query.epsilon,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'fee',
+        value: value,
+        epsilon: epsilon,
+      ));
+    });
+  }
+
+  QueryBuilder<TransactionRecord, TransactionRecord, QAfterFilterCondition>
+      feeLessThan(
+    double? value, {
+    bool include = false,
+    double epsilon = Query.epsilon,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'fee',
+        value: value,
+        epsilon: epsilon,
+      ));
+    });
+  }
+
+  QueryBuilder<TransactionRecord, TransactionRecord, QAfterFilterCondition>
+      feeBetween(
+    double? lower,
+    double? upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+    double epsilon = Query.epsilon,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'fee',
         lower: lower,
         includeLower: includeLower,
         upper: upper,
@@ -1547,6 +1721,19 @@ extension TransactionRecordQuerySortBy
     });
   }
 
+  QueryBuilder<TransactionRecord, TransactionRecord, QAfterSortBy> sortByFee() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'fee', Sort.asc);
+    });
+  }
+
+  QueryBuilder<TransactionRecord, TransactionRecord, QAfterSortBy>
+      sortByFeeDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'fee', Sort.desc);
+    });
+  }
+
   QueryBuilder<TransactionRecord, TransactionRecord, QAfterSortBy>
       sortByNotes() {
     return QueryBuilder.apply(this, (query) {
@@ -1687,6 +1874,19 @@ extension TransactionRecordQuerySortThenBy
       thenByAmountDesc() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'amount', Sort.desc);
+    });
+  }
+
+  QueryBuilder<TransactionRecord, TransactionRecord, QAfterSortBy> thenByFee() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'fee', Sort.asc);
+    });
+  }
+
+  QueryBuilder<TransactionRecord, TransactionRecord, QAfterSortBy>
+      thenByFeeDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'fee', Sort.desc);
     });
   }
 
@@ -1839,6 +2039,13 @@ extension TransactionRecordQueryWhereDistinct
     });
   }
 
+  QueryBuilder<TransactionRecord, TransactionRecord, QDistinct>
+      distinctByFee() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'fee');
+    });
+  }
+
   QueryBuilder<TransactionRecord, TransactionRecord, QDistinct> distinctByNotes(
       {bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
@@ -1916,6 +2123,12 @@ extension TransactionRecordQueryProperty
   QueryBuilder<TransactionRecord, double, QQueryOperations> amountProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'amount');
+    });
+  }
+
+  QueryBuilder<TransactionRecord, double?, QQueryOperations> feeProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'fee');
     });
   }
 

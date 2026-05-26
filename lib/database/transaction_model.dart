@@ -49,6 +49,7 @@ class TransactionRecord {
   String? senderName;
 
   /// Optional: phone number of sender
+  @Index()
   String? senderNumber;
 
   /// Optional: remaining balance of e-wallet
@@ -59,4 +60,7 @@ class TransactionRecord {
 
   /// Optional: any extra notes you want to add
   String? notes;
+
+  /// Optional: the computed service fee for this transaction
+  double? fee;
 }

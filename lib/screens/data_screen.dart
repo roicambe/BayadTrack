@@ -142,7 +142,7 @@ class DataScreenState extends State<DataScreen>
     if (editedReceipt == null || !mounted) return;
 
     try {
-      await _db.saveFromParsedReceipt(editedReceipt);
+      await _db.saveFromParsedReceipt(editedReceipt, manualFee: editedReceipt.fee);
       if (!mounted) return;
       AppToast.success(context, 'Transaction saved!');
     } catch (_) {
@@ -303,7 +303,10 @@ class _MinimalTabBar extends StatelessWidget {
                         : theme.colorScheme.onSurface.withValues(alpha: 0.35),
                     fontFamily: theme.textTheme.bodyLarge?.fontFamily,
                   ),
-                  child: Text(_labels[i]),
+                  child: Text(
+                    _labels[i],
+                    textScaler: TextScaler.noScaling,
+                  ),
                 ),
               ),
             );
@@ -723,6 +726,7 @@ class _TransactionCardState extends State<_TransactionCard> {
                               ),
                               child: Text(
                                 _typeLabels[widget.record.transactionType] ?? 'Sent',
+                                textScaler: TextScaler.noScaling,
                                 style: TextStyle(
                                   color: color,
                                   fontSize: 10,
@@ -738,32 +742,67 @@ class _TransactionCardState extends State<_TransactionCard> {
                           style: theme.textTheme.bodySmall?.copyWith(
                             color: theme.colorScheme.onSurface.withValues(alpha: 0.55),
                           ),
+                          overflow: TextOverflow.ellipsis,
+                          maxLines: 1,
                         ),
                       ],
                     ),
                   ),
 
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      Text(
-                        currency.format(widget.record.amount),
-                        style: theme.textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w700,
-                          color: widget.record.transactionType == TransactionType.received
-                              ? const Color(0xFF2E7D32)
-                              : theme.colorScheme.onSurface,
+                  Flexible(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            Flexible(
+                              child: Text(
+                                currency.format(widget.record.amount),
+                                style: theme.textTheme.titleMedium?.copyWith(
+                                  fontWeight: FontWeight.w700,
+                                  color: widget.record.transactionType == TransactionType.received
+                                      ? const Color(0xFF2E7D32)
+                                      : theme.colorScheme.onSurface,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                                maxLines: 1,
+                              ),
+                            ),
+                            if (widget.record.fee != null && widget.record.fee! > 0) ...[
+                              const SizedBox(width: 6),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
+                                decoration: BoxDecoration(
+                                  color: Colors.purple.shade400.withValues(alpha: 0.12),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Text(
+                                  '+₱${widget.record.fee!.toStringAsFixed(widget.record.fee! % 1 == 0 ? 0 : 2)}',
+                                  textScaler: TextScaler.noScaling,
+                                  style: TextStyle(
+                                    color: Colors.purple.shade400,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ],
                         ),
-                      ),
-                      const SizedBox(height: 3),
-                      Text(
-                        DateFormat('MMM d, yyyy • hh:mm a').format(widget.record.timestamp),
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.onSurface.withValues(alpha: 0.40),
-                          fontSize: 11,
+                        const SizedBox(height: 3),
+                        Text(
+                          DateFormat('MMM d, yyyy • hh:mm a').format(widget.record.timestamp),
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.onSurface.withValues(alpha: 0.40),
+                            fontSize: 11,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                          maxLines: 1,
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ],
               ),
@@ -822,6 +861,7 @@ class _TransactionDetailsSheetState extends State<_TransactionDetailsSheet> {
   late final TextEditingController _nameController;
   late final TextEditingController _phoneController;
   late final TextEditingController _amountController;
+  late final TextEditingController _feeController;
   late final TextEditingController _dateController;
   late final TextEditingController _timeController;
   late final TextEditingController _refController;
@@ -851,6 +891,10 @@ class _TransactionDetailsSheetState extends State<_TransactionDetailsSheet> {
     _nameController = TextEditingController(text: r.senderName ?? '');
     _phoneController = TextEditingController(text: r.senderNumber ?? '');
     _amountController = TextEditingController(text: r.amount.toStringAsFixed(2));
+    _feeController = TextEditingController(
+      text: r.fee?.toStringAsFixed(2) ?? '',
+    );
+    
     _dateController = TextEditingController(
       text: DateFormat('MMM d, yyyy').format(r.timestamp),
     );
@@ -862,18 +906,39 @@ class _TransactionDetailsSheetState extends State<_TransactionDetailsSheet> {
       text: r.remainingBalance != null ? r.remainingBalance!.toStringAsFixed(2) : '',
     );
     _transactionType = r.transactionType;
+
+    _amountController.addListener(_onAmountChanged);
+    _feeController.addListener(_onFeeChanged);
+  }
+
+  void _onFeeChanged() {
+    if (mounted) setState(() {});
   }
 
   @override
   void dispose() {
+    _amountController.removeListener(_onAmountChanged);
+    _feeController.removeListener(_onFeeChanged);
     _nameController.dispose();
     _phoneController.dispose();
     _amountController.dispose();
+    _feeController.dispose();
     _dateController.dispose();
     _timeController.dispose();
     _refController.dispose();
     _balanceController.dispose();
     super.dispose();
+  }
+
+  void _onAmountChanged() {
+    final amt = double.tryParse(_amountController.text.trim()) ?? 0.0;
+    _db.calculateFeeForAmount(amt).then((fee) {
+      if (mounted) {
+        setState(() {
+          _feeController.text = fee?.toStringAsFixed(2) ?? '0.00';
+        });
+      }
+    });
   }
 
   Future<void> _selectDate() async {
@@ -953,6 +1018,8 @@ class _TransactionDetailsSheetState extends State<_TransactionDetailsSheet> {
     final newPhone = _phoneController.text.trim().isEmpty ? null : _phoneController.text.trim();
     final newRef = _refController.text.trim().isEmpty ? 'UNKNOWN' : _refController.text.trim();
 
+    final feeVal = double.tryParse(_feeController.text.trim());
+
     final isNameChanged = newName != widget.record.senderName;
     final isPhoneChanged = newPhone != widget.record.senderNumber;
     final isAmountChanged = amtVal != widget.record.amount;
@@ -960,6 +1027,7 @@ class _TransactionDetailsSheetState extends State<_TransactionDetailsSheet> {
     final isRefChanged = newRef != widget.record.referenceNumber;
     final isBalanceChanged = balVal != widget.record.remainingBalance;
     final isTypeChanged = _transactionType != widget.record.transactionType;
+    final isFeeChanged = feeVal != widget.record.fee;
 
     final hasChanges = isNameChanged ||
         isPhoneChanged ||
@@ -967,7 +1035,8 @@ class _TransactionDetailsSheetState extends State<_TransactionDetailsSheet> {
         isDateChanged ||
         isRefChanged ||
         isBalanceChanged ||
-        isTypeChanged;
+        isTypeChanged ||
+        isFeeChanged;
 
     if (!hasChanges) {
       if (!mounted) return;
@@ -983,7 +1052,8 @@ class _TransactionDetailsSheetState extends State<_TransactionDetailsSheet> {
       ..timestamp = dtVal
       ..referenceNumber = newRef
       ..remainingBalance = balVal
-      ..transactionType = _transactionType;
+      ..transactionType = _transactionType
+      ..fee = feeVal;
 
     try {
       await _db.saveTransaction(updated);
@@ -1108,14 +1178,42 @@ class _TransactionDetailsSheetState extends State<_TransactionDetailsSheet> {
                       keyboardType: TextInputType.phone,
                       activeColor: color,
                     ),
-                    _EditField(
-                      label: 'Amount',
-                      controller: _amountController,
-                      prefixText: '₱',
-                      keyboardType: const TextInputType.numberWithOptions(
-                        decimal: true,
-                      ),
-                      activeColor: color,
+                    Row(
+                      children: [
+                        Expanded(
+                          flex: 3,
+                          child: _EditField(
+                            label: 'Amount',
+                            controller: _amountController,
+                            prefixText: '₱',
+                            keyboardType: const TextInputType.numberWithOptions(
+                              decimal: true,
+                            ),
+                            activeColor: color,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          flex: 2,
+                          child: _EditField(
+                            label: 'Service Fee',
+                            controller: _feeController,
+                            prefixText: '₱',
+                            keyboardType: const TextInputType.numberWithOptions(
+                              decimal: true,
+                            ),
+                            activeColor: color,
+                            suffixIcon: _feeController.text.isNotEmpty
+                                ? IconButton(
+                                    icon: const Icon(Icons.clear_rounded, size: 18),
+                                    onPressed: () {
+                                      _feeController.clear();
+                                    },
+                                  )
+                                : null,
+                          ),
+                        ),
+                      ],
                     ),
                     Row(
                       children: [
@@ -1443,10 +1541,13 @@ class _ConfirmEntrySheet extends StatefulWidget {
 }
 
 class _ConfirmEntrySheetState extends State<_ConfirmEntrySheet> {
+  final _db = IsarService();
   late final TextEditingController _nameController;
   late final TextEditingController _phoneController;
   late final TextEditingController _amountController;
+  late final TextEditingController _feeController;
   late final TextEditingController _dateController;
+  late final TextEditingController _timeController;
   late final TextEditingController _refController;
   late final TextEditingController _balanceController;
 
@@ -1475,28 +1576,127 @@ class _ConfirmEntrySheetState extends State<_ConfirmEntrySheet> {
     _amountController = TextEditingController(
       text: r.amount?.toStringAsFixed(2) ?? '',
     );
-    _dateController = TextEditingController(
-      text: r.transactionDate != null
-          ? DateFormat('yyyy-MM-dd HH:mm').format(r.transactionDate!)
-          : DateFormat('yyyy-MM-dd HH:mm').format(DateTime.now()),
+    _feeController = TextEditingController(
+      text: r.fee?.toStringAsFixed(2) ?? '',
     );
+    
+    final initialDate = r.transactionDate ?? DateTime.now();
+    _dateController = TextEditingController(
+      text: DateFormat('MMM d, yyyy').format(initialDate),
+    );
+    _timeController = TextEditingController(
+      text: DateFormat('hh:mm a').format(initialDate),
+    );
+    
     _refController = TextEditingController(text: r.referenceNumber ?? '');
     _balanceController = TextEditingController(
       text: r.remainingBalance != null
           ? r.remainingBalance!.toStringAsFixed(2)
           : '',
     );
+
+    _amountController.addListener(_onAmountChanged);
+    _feeController.addListener(_onFeeChanged);
+    
+    // Trigger initial calculation if amount is populated but fee is not
+    if (r.amount != null && r.fee == null) {
+      _onAmountChanged();
+    }
+  }
+
+  void _onFeeChanged() {
+    if (mounted) setState(() {});
   }
 
   @override
   void dispose() {
+    _amountController.removeListener(_onAmountChanged);
+    _feeController.removeListener(_onFeeChanged);
     _nameController.dispose();
     _phoneController.dispose();
     _amountController.dispose();
+    _feeController.dispose();
     _dateController.dispose();
+    _timeController.dispose();
     _refController.dispose();
     _balanceController.dispose();
     super.dispose();
+  }
+
+  void _onAmountChanged() {
+    final amt = double.tryParse(_amountController.text.trim()) ?? 0.0;
+    _db.calculateFeeForAmount(amt).then((fee) {
+      if (mounted) {
+        setState(() {
+          _feeController.text = fee?.toStringAsFixed(2) ?? '0.00';
+        });
+      }
+    });
+  }
+
+  Future<void> _selectDate() async {
+    DateTime initial = widget.receipt.transactionDate ?? DateTime.now();
+    try {
+      initial = DateFormat('MMM d, yyyy').parse(_dateController.text.trim());
+    } catch (_) {}
+
+    final color = _platformColors[widget.receipt.platform] ?? const Color(0xFF888888);
+
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: initial,
+      firstDate: DateTime(2000),
+      lastDate: DateTime(2100),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: Theme.of(context).colorScheme.copyWith(
+              primary: color,
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+
+    if (picked != null) {
+      setState(() {
+        _dateController.text = DateFormat('MMM d, yyyy').format(picked);
+      });
+    }
+  }
+
+  Future<void> _selectTime() async {
+    final initialDate = widget.receipt.transactionDate ?? DateTime.now();
+    TimeOfDay initial = TimeOfDay.fromDateTime(initialDate);
+    try {
+      final parsedDate = DateFormat('hh:mm a').parse(_timeController.text.trim());
+      initial = TimeOfDay.fromDateTime(parsedDate);
+    } catch (_) {}
+
+    final color = _platformColors[widget.receipt.platform] ?? const Color(0xFF888888);
+
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: initial,
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: Theme.of(context).colorScheme.copyWith(
+              primary: color,
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+
+    if (picked != null) {
+      setState(() {
+        final parsedDate = DateTime(2020, 1, 1, picked.hour, picked.minute);
+        _timeController.text = DateFormat('hh:mm a').format(parsedDate);
+      });
+    }
   }
 
   void _onSave() {
@@ -1504,11 +1704,14 @@ class _ConfirmEntrySheetState extends State<_ConfirmEntrySheet> {
     final balVal = double.tryParse(_balanceController.text.trim());
     DateTime? dtVal;
     try {
-      dtVal = DateFormat('yyyy-MM-dd HH:mm').parse(_dateController.text.trim());
+      final datePart = DateFormat('MMM d, yyyy').parse(_dateController.text.trim());
+      final parsedTime = DateFormat('hh:mm a').parse(_timeController.text.trim());
+      dtVal = DateTime(datePart.year, datePart.month, datePart.day, parsedTime.hour, parsedTime.minute);
     } catch (_) {
-      dtVal = widget.receipt.transactionDate;
+      dtVal = widget.receipt.transactionDate ?? DateTime.now();
     }
 
+    final feeVal = double.tryParse(_feeController.text.trim());
     final edited = ParsedReceipt(
       rawText: widget.receipt.rawText,
       platform: widget.receipt.platform,
@@ -1525,6 +1728,7 @@ class _ConfirmEntrySheetState extends State<_ConfirmEntrySheet> {
           : _phoneController.text.trim(),
       transactionDate: dtVal,
       remainingBalance: balVal,
+      fee: feeVal,
     );
 
     Navigator.of(context).pop(edited);
@@ -1613,20 +1817,67 @@ class _ConfirmEntrySheetState extends State<_ConfirmEntrySheet> {
                       keyboardType: TextInputType.phone,
                       activeColor: color,
                     ),
-                    _EditField(
-                      label: 'Amount',
-                      controller: _amountController,
-                      prefixText: '₱',
-                      keyboardType: const TextInputType.numberWithOptions(
-                        decimal: true,
-                      ),
-                      activeColor: color,
+                    Row(
+                      children: [
+                        Expanded(
+                          flex: 3,
+                          child: _EditField(
+                            label: 'Amount',
+                            controller: _amountController,
+                            prefixText: '₱',
+                            keyboardType: const TextInputType.numberWithOptions(
+                              decimal: true,
+                            ),
+                            activeColor: color,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          flex: 2,
+                          child: _EditField(
+                            label: 'Service Fee',
+                            controller: _feeController,
+                            prefixText: '₱',
+                            keyboardType: const TextInputType.numberWithOptions(
+                              decimal: true,
+                            ),
+                            activeColor: color,
+                            suffixIcon: _feeController.text.isNotEmpty
+                                ? IconButton(
+                                    icon: const Icon(Icons.clear_rounded, size: 18),
+                                    onPressed: () {
+                                      _feeController.clear();
+                                    },
+                                  )
+                                : null,
+                          ),
+                        ),
+                      ],
                     ),
-                    _EditField(
-                      label: 'Date & Time (YYYY-MM-DD HH:MM)',
-                      controller: _dateController,
-                      icon: Icons.calendar_month_rounded,
-                      activeColor: color,
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _EditField(
+                            label: 'Date',
+                            controller: _dateController,
+                            icon: Icons.calendar_month_rounded,
+                            activeColor: color,
+                            readOnly: true,
+                            onTap: _selectDate,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: _EditField(
+                            label: 'Time',
+                            controller: _timeController,
+                            icon: Icons.access_time_filled_rounded,
+                            activeColor: color,
+                            readOnly: true,
+                            onTap: _selectTime,
+                          ),
+                        ),
+                      ],
                     ),
                     _EditField(
                       label: 'Reference Number',
@@ -1719,6 +1970,7 @@ class _EditField extends StatelessWidget {
   final TextEditingController controller;
   final IconData? icon;
   final String? prefixText;
+  final Widget? suffixIcon;
   final TextInputType keyboardType;
   final Color activeColor;
   final VoidCallback? onTap;
@@ -1730,6 +1982,7 @@ class _EditField extends StatelessWidget {
     required this.activeColor,
     this.icon,
     this.prefixText,
+    this.suffixIcon,
     this.keyboardType = TextInputType.text,
     this.onTap,
     this.readOnly = false,
@@ -1779,6 +2032,7 @@ class _EditField extends StatelessWidget {
                             ),
                           )
                         : null),
+              suffixIcon: suffixIcon,
               filled: true,
               fillColor: isDark
                   ? theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.5)

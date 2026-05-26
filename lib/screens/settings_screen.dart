@@ -3,6 +3,8 @@ import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../theme/theme_provider.dart';
 import '../theme/app_colors.dart';
+import 'fee_settings_screen.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 /// Settings screen — three sections:
 ///   1. Appearance   — Light / Dark / System theme toggle with visual previews
@@ -31,61 +33,144 @@ class SettingsScreen extends StatelessWidget {
             // Headers removed for a cleaner interface
             const SizedBox(height: 16),
 
-            // ── Section 1: Appearance ──────────────────────────────────────
-            _SectionHeader('Appearance'),
-            const SizedBox(height: 12),
-            _AppearanceSection(provider: provider),
-            const SizedBox(height: 24),
+            _SettingsExpansionTile(
+              title: 'App Customization',
+              icon: Icons.palette_outlined,
+              children: [
+                // ── Section 1: Appearance ──────────────────────────────────────
+                const _SectionHeader('Appearance'),
+                const SizedBox(height: 12),
+                _AppearanceSection(provider: provider),
+                const SizedBox(height: 24),
 
-            // ── Section 1.5: Font Family ───────────────────────────────────
-            _SectionHeader('Font Family'),
-            const SizedBox(height: 12),
-            _FontFamilySection(provider: provider),
-            const SizedBox(height: 24),
+                // ── Section 1.5: Font Family ───────────────────────────────────
+                const _SectionHeader('Font Family'),
+                const SizedBox(height: 12),
+                _FontFamilySection(provider: provider),
+                const SizedBox(height: 24),
 
-            // ── Section 2: App Text Size ───────────────────────────────────
-            _SectionHeader('App Text Size'),
-            const SizedBox(height: 4),
-            Text(
-              'Affects all text across the app instantly.',
-              style: theme.textTheme.bodySmall,
+                // ── Section 2: App Text Size ───────────────────────────────────
+                const _SectionHeader('App Text Size'),
+                const SizedBox(height: 4),
+                Text(
+                  'Affects all text across the app instantly.',
+                  style: theme.textTheme.bodySmall,
+                ),
+                const SizedBox(height: 12),
+                _FontSizeSection(provider: provider),
+                const SizedBox(height: 8),
+              ],
             ),
-            const SizedBox(height: 12),
-            _FontSizeSection(provider: provider),
-            const SizedBox(height: 24),
+            const SizedBox(height: 16),
 
-            // ── Section 3: Data & Reports ──────────────────────────────────
-            _SectionHeader('Data & Reports'),
-            const SizedBox(height: 12),
-            _DataActionButton(
-              icon:  Icons.table_chart_outlined,
-              label: 'Export to Excel',
-              color: AppColors.excelGreen,
-              onTap: () {
-                // TODO: implement Excel export
-              },
+            _SettingsExpansionTile(
+              title: 'Transaction Fees',
+              icon: Icons.percent_rounded,
+              children: [
+                _DataActionButton(
+                  icon: Icons.payments_outlined,
+                  label: 'GCash Service Fees',
+                  color: AppColors.gcash,
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const FeeSettingsScreen(),
+                      ),
+                    );
+                  },
+                ),
+              ],
             ),
-            const SizedBox(height: 10),
-            _DataActionButton(
-              icon:  Icons.picture_as_pdf_outlined,
-              label: 'Export to PDF',
-              color: AppColors.pdfRed,
-              onTap: () {
-                // TODO: implement PDF export
-              },
-            ),
-            const SizedBox(height: 10),
-            _DataActionButton(
-              icon:  Icons.backup_outlined,
-              label: 'Backup Database',
-              color: AppColors.backupBlue,
-              onTap: () {
-                // TODO: implement database backup
-              },
+            const SizedBox(height: 16),
+
+            _SettingsExpansionTile(
+              title: 'Data & Reports',
+              icon: Icons.folder_open_rounded,
+              children: [
+                _DataActionButton(
+                  icon:  Icons.table_chart_outlined,
+                  label: 'Export to Excel',
+                  color: AppColors.excelGreen,
+                  onTap: () {
+                    // TODO: implement Excel export
+                  },
+                ),
+                const SizedBox(height: 10),
+                _DataActionButton(
+                  icon:  Icons.picture_as_pdf_outlined,
+                  label: 'Export to PDF',
+                  color: AppColors.pdfRed,
+                  onTap: () {
+                    // TODO: implement PDF export
+                  },
+                ),
+                const SizedBox(height: 10),
+                _DataActionButton(
+                  icon:  Icons.backup_outlined,
+                  label: 'Backup Database',
+                  color: AppColors.backupBlue,
+                  onTap: () {
+                    // TODO: implement database backup
+                  },
+                ),
+                const SizedBox(height: 8),
+              ],
             ),
             const SizedBox(height: 24),
           ],
         ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Settings Expansion Tile
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _SettingsExpansionTile extends StatelessWidget {
+  final String title;
+  final IconData icon;
+  final List<Widget> children;
+  final bool initiallyExpanded;
+
+  const _SettingsExpansionTile({
+    required this.title,
+    required this.icon,
+    required this.children,
+    this.initiallyExpanded = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Theme(
+      // Remove default borders and divider lines
+      data: theme.copyWith(dividerColor: Colors.transparent),
+      child: ExpansionTile(
+        initiallyExpanded: initiallyExpanded,
+        iconColor: theme.colorScheme.primary,
+        collapsedIconColor: theme.colorScheme.onSurfaceVariant,
+        tilePadding: EdgeInsets.zero, // Flush to screen edges
+        childrenPadding: const EdgeInsets.only(top: 8, bottom: 8), // Flush to screen edges
+        title: Row(
+          children: [
+            Icon(icon, size: 24, color: theme.colorScheme.primary),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Text(
+                title,
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w800,
+                  fontSize: 18,
+                ),
+              ),
+            ),
+          ],
+        ),
+        children: children,
       ),
     );
   }
