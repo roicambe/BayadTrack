@@ -4,7 +4,6 @@ import 'package:google_fonts/google_fonts.dart';
 import '../theme/theme_provider.dart';
 import '../theme/app_colors.dart';
 import 'fee_settings_screen.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 /// Settings screen — three sections:
 ///   1. Appearance   — Light / Dark / System theme toggle with visual previews
@@ -17,7 +16,6 @@ class SettingsScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     // context.watch rebuilds this widget whenever ThemeProvider notifies
     final provider = context.watch<ThemeProvider>();
-    final theme    = Theme.of(context);
 
     return SafeArea(
       child: SingleChildScrollView(
@@ -49,16 +47,7 @@ class SettingsScreen extends StatelessWidget {
                 _FontFamilySection(provider: provider),
                 const SizedBox(height: 24),
 
-                // ── Section 2: App Text Size ───────────────────────────────────
-                const _SectionHeader('App Text Size'),
-                const SizedBox(height: 4),
-                Text(
-                  'Affects all text across the app instantly.',
-                  style: theme.textTheme.bodySmall,
-                ),
-                const SizedBox(height: 12),
-                _FontSizeSection(provider: provider),
-                const SizedBox(height: 8),
+
               ],
             ),
             const SizedBox(height: 16),
@@ -133,13 +122,11 @@ class _SettingsExpansionTile extends StatelessWidget {
   final String title;
   final IconData icon;
   final List<Widget> children;
-  final bool initiallyExpanded;
 
   const _SettingsExpansionTile({
     required this.title,
     required this.icon,
     required this.children,
-    this.initiallyExpanded = false,
   });
 
   @override
@@ -150,7 +137,7 @@ class _SettingsExpansionTile extends StatelessWidget {
       // Remove default borders and divider lines
       data: theme.copyWith(dividerColor: Colors.transparent),
       child: ExpansionTile(
-        initiallyExpanded: initiallyExpanded,
+        initiallyExpanded: false,
         iconColor: theme.colorScheme.primary,
         collapsedIconColor: theme.colorScheme.onSurfaceVariant,
         tilePadding: EdgeInsets.zero, // Flush to screen edges
@@ -162,9 +149,8 @@ class _SettingsExpansionTile extends StatelessWidget {
             Expanded(
               child: Text(
                 title,
-                style: theme.textTheme.titleMedium?.copyWith(
+                style: theme.textTheme.titleLarge?.copyWith(
                   fontWeight: FontWeight.w800,
-                  fontSize: 18,
                 ),
               ),
             ),
@@ -414,89 +400,6 @@ class _FontOption extends StatelessWidget {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Section 2 — Font Size Selector
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _FontSizeSection extends StatelessWidget {
-  final ThemeProvider provider;
-  const _FontSizeSection({required this.provider});
-
-  // Each entry: (scale factor, button label, preview size, subtitle)
-  static const _options = [
-    (scale: 1.0, label: 'A',   size: 18.0, name: 'Normal'),
-    (scale: 1.2, label: 'A+',  size: 22.0, name: 'Large'),
-    (scale: 1.4, label: 'A++', size: 26.0, name: 'Extra\nLarge'),
-  ];
-
-  @override
-  Widget build(BuildContext context) {
-    final theme   = Theme.of(context);
-    final primary = theme.colorScheme.primary;
-
-    return Row(
-      children: _options.asMap().entries.map((entry) {
-        final opt        = entry.value;
-        final isLast     = entry.key == _options.length - 1;
-        final isSelected = (provider.fontScale - opt.scale).abs() < 0.01;
-
-        return Expanded(
-          child: Padding(
-            padding: EdgeInsets.only(right: isLast ? 0 : 10),
-            child: GestureDetector(
-              onTap: () => provider.setFontScale(opt.scale),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
-                decoration: BoxDecoration(
-                  color: isSelected
-                      ? primary.withValues(alpha: 0.10)
-                      : theme.colorScheme.surfaceContainerHighest,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(
-                    color: isSelected
-                        ? primary
-                        : theme.colorScheme.outline.withValues(alpha: 0.4),
-                    width: isSelected ? 2 : 1,
-                  ),
-                ),
-                child: Column(
-                  children: [
-                    // Preview letter — always rendered at opt.size regardless
-                    // of the current font scale so the button shows its own size
-                    Text(
-                      opt.label,
-                      textScaler: TextScaler.noScaling,
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: opt.size,
-                        fontWeight: FontWeight.w700,
-                        color: isSelected
-                            ? primary
-                            : theme.textTheme.bodyLarge?.color,
-                        height: 1.1,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      opt.name,
-                      textScaler: TextScaler.noScaling,
-                      textAlign: TextAlign.center,
-                      style: theme.textTheme.labelSmall?.copyWith(
-                        color: isSelected ? primary : null,
-                        fontWeight: isSelected ? FontWeight.w700 : null,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        );
-      }).toList(),
-    );
-  }
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Section 3 — Data Action Button
@@ -555,7 +458,7 @@ class _DataActionButton extends StatelessWidget {
               Expanded(
                 child: Text(
                   label,
-                  style: theme.textTheme.titleSmall?.copyWith(
+                  style: theme.textTheme.bodyLarge?.copyWith(
                     color: color,
                     fontWeight: FontWeight.w700,
                   ),

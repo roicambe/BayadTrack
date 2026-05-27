@@ -71,11 +71,21 @@ class ReceiptParser {
   // ── Transaction type detection ──────────────────────────────────────────
   static TransactionType _detectType(String text) {
     final lower = text.toLowerCase();
-    if (lower.contains('you received') ||
+    
+    // Explicitly check for received patterns
+    if (lower.contains('you have received') ||
+        lower.contains('you received') ||
         lower.contains('money received') ||
         lower.contains('received from')) {
       return TransactionType.received;
     }
+    
+    // Explicitly check for sent patterns
+    if (lower.contains('you have sent') ||
+        lower.contains('successfully sent')) {
+      return TransactionType.sent;
+    }
+
     if (lower.contains('cash in') ||
         lower.contains('cashin')) {
       return TransactionType.cashIn;
@@ -89,6 +99,8 @@ class ReceiptParser {
         lower.contains('bills payment')) {
       return TransactionType.payment;
     }
+    
+    // Default fallback
     return TransactionType.sent;
   }
 

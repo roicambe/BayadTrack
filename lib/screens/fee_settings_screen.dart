@@ -54,7 +54,7 @@ class _FeeSettingsScreenState extends State<FeeSettingsScreen> {
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
           title: Text(
             isEditing ? 'Edit Fee Range' : 'Add Fee Range',
-            style: const TextStyle(fontWeight: FontWeight.w800),
+            style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
           ),
           content: Form(
             key: formKey,
@@ -118,8 +118,10 @@ class _FeeSettingsScreenState extends State<FeeSettingsScreen> {
               TextButton(
                 onPressed: () async {
                   await _db.deleteFeeRange(range.id);
-                  if (mounted) {
+                  if (context.mounted) {
                     Navigator.pop(context);
+                  }
+                  if (mounted) {
                     _loadRanges();
                   }
                 },
@@ -148,8 +150,10 @@ class _FeeSettingsScreenState extends State<FeeSettingsScreen> {
                   newRange.fee = feeAmt;
 
                   await _db.saveFeeRange(newRange);
-                  if (mounted) {
+                  if (context.mounted) {
                     Navigator.pop(context);
+                  }
+                  if (mounted) {
                     _loadRanges();
                   }
                 }
@@ -174,9 +178,9 @@ class _FeeSettingsScreenState extends State<FeeSettingsScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text(
+        title: Text(
           'GCash Service Fees',
-          style: TextStyle(fontWeight: FontWeight.w800),
+          style: theme.textTheme.headlineLarge?.copyWith(fontWeight: FontWeight.w800),
         ),
         elevation: 0,
         backgroundColor: Colors.transparent,
@@ -321,9 +325,8 @@ class _FeeSettingsScreenState extends State<FeeSettingsScreen> {
                                   Text(
                                     currencyFormat.format(r.fee),
                                     textScaler: TextScaler.noScaling,
-                                    style: TextStyle(
+                                    style: theme.textTheme.titleMedium?.copyWith(
                                       fontWeight: FontWeight.w900,
-                                      fontSize: 16,
                                       color: theme.colorScheme.primary,
                                     ),
                                   ),
@@ -393,10 +396,9 @@ class _DialogEditField extends StatelessWidget {
                       alignment: Alignment.center,
                       child: Text(
                         prefixText!,
-                        style: const TextStyle(
+                        style: theme.textTheme.titleMedium?.copyWith(
                           color: AppColors.gcash,
                           fontWeight: FontWeight.w800,
-                          fontSize: 16,
                         ),
                       ),
                     )
@@ -606,10 +608,9 @@ class _SettingsEditField extends StatelessWidget {
               alignment: Alignment.center,
               child: Text(
                 prefixText,
-                style: const TextStyle(
+                style: theme.textTheme.titleSmall?.copyWith(
                   color: AppColors.gcash,
                   fontWeight: FontWeight.w800,
-                  fontSize: 14,
                 ),
               ),
             ),

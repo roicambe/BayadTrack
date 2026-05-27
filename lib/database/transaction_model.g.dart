@@ -27,49 +27,54 @@ const TransactionRecordSchema = CollectionSchema(
       name: r'fee',
       type: IsarType.double,
     ),
-    r'notes': PropertySchema(
+    r'isSettled': PropertySchema(
       id: 2,
+      name: r'isSettled',
+      type: IsarType.bool,
+    ),
+    r'notes': PropertySchema(
+      id: 3,
       name: r'notes',
       type: IsarType.string,
     ),
     r'platform': PropertySchema(
-      id: 3,
+      id: 4,
       name: r'platform',
       type: IsarType.string,
       enumMap: _TransactionRecordplatformEnumValueMap,
     ),
     r'recordedAt': PropertySchema(
-      id: 4,
+      id: 5,
       name: r'recordedAt',
       type: IsarType.dateTime,
     ),
     r'referenceNumber': PropertySchema(
-      id: 5,
+      id: 6,
       name: r'referenceNumber',
       type: IsarType.string,
     ),
     r'remainingBalance': PropertySchema(
-      id: 6,
+      id: 7,
       name: r'remainingBalance',
       type: IsarType.double,
     ),
     r'senderName': PropertySchema(
-      id: 7,
+      id: 8,
       name: r'senderName',
       type: IsarType.string,
     ),
     r'senderNumber': PropertySchema(
-      id: 8,
+      id: 9,
       name: r'senderNumber',
       type: IsarType.string,
     ),
     r'timestamp': PropertySchema(
-      id: 9,
+      id: 10,
       name: r'timestamp',
       type: IsarType.dateTime,
     ),
     r'transactionType': PropertySchema(
-      id: 10,
+      id: 11,
       name: r'transactionType',
       type: IsarType.string,
       enumMap: _TransactionRecordtransactionTypeEnumValueMap,
@@ -141,15 +146,16 @@ void _transactionRecordSerialize(
 ) {
   writer.writeDouble(offsets[0], object.amount);
   writer.writeDouble(offsets[1], object.fee);
-  writer.writeString(offsets[2], object.notes);
-  writer.writeString(offsets[3], object.platform.name);
-  writer.writeDateTime(offsets[4], object.recordedAt);
-  writer.writeString(offsets[5], object.referenceNumber);
-  writer.writeDouble(offsets[6], object.remainingBalance);
-  writer.writeString(offsets[7], object.senderName);
-  writer.writeString(offsets[8], object.senderNumber);
-  writer.writeDateTime(offsets[9], object.timestamp);
-  writer.writeString(offsets[10], object.transactionType.name);
+  writer.writeBool(offsets[2], object.isSettled);
+  writer.writeString(offsets[3], object.notes);
+  writer.writeString(offsets[4], object.platform.name);
+  writer.writeDateTime(offsets[5], object.recordedAt);
+  writer.writeString(offsets[6], object.referenceNumber);
+  writer.writeDouble(offsets[7], object.remainingBalance);
+  writer.writeString(offsets[8], object.senderName);
+  writer.writeString(offsets[9], object.senderNumber);
+  writer.writeDateTime(offsets[10], object.timestamp);
+  writer.writeString(offsets[11], object.transactionType.name);
 }
 
 TransactionRecord _transactionRecordDeserialize(
@@ -162,18 +168,19 @@ TransactionRecord _transactionRecordDeserialize(
   object.amount = reader.readDouble(offsets[0]);
   object.fee = reader.readDoubleOrNull(offsets[1]);
   object.id = id;
-  object.notes = reader.readStringOrNull(offsets[2]);
+  object.isSettled = reader.readBool(offsets[2]);
+  object.notes = reader.readStringOrNull(offsets[3]);
   object.platform = _TransactionRecordplatformValueEnumMap[
-          reader.readStringOrNull(offsets[3])] ??
+          reader.readStringOrNull(offsets[4])] ??
       Platform.gcash;
-  object.recordedAt = reader.readDateTimeOrNull(offsets[4]);
-  object.referenceNumber = reader.readString(offsets[5]);
-  object.remainingBalance = reader.readDoubleOrNull(offsets[6]);
-  object.senderName = reader.readStringOrNull(offsets[7]);
-  object.senderNumber = reader.readStringOrNull(offsets[8]);
-  object.timestamp = reader.readDateTime(offsets[9]);
+  object.recordedAt = reader.readDateTimeOrNull(offsets[5]);
+  object.referenceNumber = reader.readString(offsets[6]);
+  object.remainingBalance = reader.readDoubleOrNull(offsets[7]);
+  object.senderName = reader.readStringOrNull(offsets[8]);
+  object.senderNumber = reader.readStringOrNull(offsets[9]);
+  object.timestamp = reader.readDateTime(offsets[10]);
   object.transactionType = _TransactionRecordtransactionTypeValueEnumMap[
-          reader.readStringOrNull(offsets[10])] ??
+          reader.readStringOrNull(offsets[11])] ??
       TransactionType.sent;
   return object;
 }
@@ -190,24 +197,26 @@ P _transactionRecordDeserializeProp<P>(
     case 1:
       return (reader.readDoubleOrNull(offset)) as P;
     case 2:
-      return (reader.readStringOrNull(offset)) as P;
+      return (reader.readBool(offset)) as P;
     case 3:
+      return (reader.readStringOrNull(offset)) as P;
+    case 4:
       return (_TransactionRecordplatformValueEnumMap[
               reader.readStringOrNull(offset)] ??
           Platform.gcash) as P;
-    case 4:
-      return (reader.readDateTimeOrNull(offset)) as P;
     case 5:
-      return (reader.readString(offset)) as P;
+      return (reader.readDateTimeOrNull(offset)) as P;
     case 6:
-      return (reader.readDoubleOrNull(offset)) as P;
+      return (reader.readString(offset)) as P;
     case 7:
-      return (reader.readStringOrNull(offset)) as P;
+      return (reader.readDoubleOrNull(offset)) as P;
     case 8:
       return (reader.readStringOrNull(offset)) as P;
     case 9:
-      return (reader.readDateTime(offset)) as P;
+      return (reader.readStringOrNull(offset)) as P;
     case 10:
+      return (reader.readDateTime(offset)) as P;
+    case 11:
       return (_TransactionRecordtransactionTypeValueEnumMap[
               reader.readStringOrNull(offset)] ??
           TransactionType.sent) as P;
@@ -610,6 +619,16 @@ extension TransactionRecordQueryFilter
         includeLower: includeLower,
         upper: upper,
         includeUpper: includeUpper,
+      ));
+    });
+  }
+
+  QueryBuilder<TransactionRecord, TransactionRecord, QAfterFilterCondition>
+      isSettledEqualTo(bool value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'isSettled',
+        value: value,
       ));
     });
   }
@@ -1735,6 +1754,20 @@ extension TransactionRecordQuerySortBy
   }
 
   QueryBuilder<TransactionRecord, TransactionRecord, QAfterSortBy>
+      sortByIsSettled() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'isSettled', Sort.asc);
+    });
+  }
+
+  QueryBuilder<TransactionRecord, TransactionRecord, QAfterSortBy>
+      sortByIsSettledDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'isSettled', Sort.desc);
+    });
+  }
+
+  QueryBuilder<TransactionRecord, TransactionRecord, QAfterSortBy>
       sortByNotes() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'notes', Sort.asc);
@@ -1904,6 +1937,20 @@ extension TransactionRecordQuerySortThenBy
   }
 
   QueryBuilder<TransactionRecord, TransactionRecord, QAfterSortBy>
+      thenByIsSettled() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'isSettled', Sort.asc);
+    });
+  }
+
+  QueryBuilder<TransactionRecord, TransactionRecord, QAfterSortBy>
+      thenByIsSettledDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'isSettled', Sort.desc);
+    });
+  }
+
+  QueryBuilder<TransactionRecord, TransactionRecord, QAfterSortBy>
       thenByNotes() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'notes', Sort.asc);
@@ -2046,6 +2093,13 @@ extension TransactionRecordQueryWhereDistinct
     });
   }
 
+  QueryBuilder<TransactionRecord, TransactionRecord, QDistinct>
+      distinctByIsSettled() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'isSettled');
+    });
+  }
+
   QueryBuilder<TransactionRecord, TransactionRecord, QDistinct> distinctByNotes(
       {bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
@@ -2129,6 +2183,12 @@ extension TransactionRecordQueryProperty
   QueryBuilder<TransactionRecord, double?, QQueryOperations> feeProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'fee');
+    });
+  }
+
+  QueryBuilder<TransactionRecord, bool, QQueryOperations> isSettledProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'isSettled');
     });
   }
 

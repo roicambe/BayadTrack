@@ -63,4 +63,7 @@ class TransactionRecord {
 
   /// Optional: the computed service fee for this transaction
   double? fee;
+
+  /// Whether the transaction has been settled (swiped right)
+  bool isSettled = false;
 }

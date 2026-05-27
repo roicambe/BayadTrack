@@ -82,13 +82,13 @@ abstract class AppTheme {
           final selected = states.contains(WidgetState.selected);
           return usePoppins 
               ? GoogleFonts.poppins(
-                  fontSize: 11,
-                  fontWeight: selected ? FontWeight.w700 : FontWeight.w400,
+                  fontSize: 9,
+                  fontWeight: FontWeight.w600,
                   color: selected ? primary : textSecondary,
                 )
               : TextStyle(
-                  fontSize: 11,
-                  fontWeight: selected ? FontWeight.w700 : FontWeight.w400,
+                  fontSize: 9,
+                  fontWeight: FontWeight.w600,
                   color: selected ? primary : textSecondary,
                 );
         }),
@@ -144,20 +144,29 @@ abstract class AppTheme {
 
       // ── Text Theme ─────────────────────────────────────────────────────────
       textTheme: base.copyWith(
-        displayLarge:   base.displayLarge?.copyWith(color: textPrimary,   fontWeight: FontWeight.w700),
-        displayMedium:  base.displayMedium?.copyWith(color: textPrimary,  fontWeight: FontWeight.w700),
-        headlineLarge:  base.headlineLarge?.copyWith(color: textPrimary,  fontWeight: FontWeight.w700),
-        headlineMedium: base.headlineMedium?.copyWith(color: textPrimary, fontWeight: FontWeight.w700),
-        headlineSmall:  base.headlineSmall?.copyWith(color: textPrimary,  fontWeight: FontWeight.w600),
-        titleLarge:     base.titleLarge?.copyWith(color: textPrimary,     fontWeight: FontWeight.w700),
-        titleMedium:    base.titleMedium?.copyWith(color: textPrimary,    fontWeight: FontWeight.w600),
-        titleSmall:     base.titleSmall?.copyWith(color: textSecondary,   fontWeight: FontWeight.w500),
-        bodyLarge:      base.bodyLarge?.copyWith(color: textPrimary),
-        bodyMedium:     base.bodyMedium?.copyWith(color: textPrimary),
-        bodySmall:      base.bodySmall?.copyWith(color: textSecondary),
-        labelLarge:     base.labelLarge?.copyWith(color: textPrimary,     fontWeight: FontWeight.w600),
-        labelMedium:    base.labelMedium?.copyWith(color: textSecondary),
-        labelSmall:     base.labelSmall?.copyWith(color: textSecondary),
+        // H1 - Large Titles, Balances
+        headlineLarge:  base.headlineLarge?.copyWith(color: textPrimary,  fontWeight: FontWeight.w800, fontSize: 18, letterSpacing: -0.5),
+        // H2 - Section Titles (like REAL-TIME BALANCES)
+        titleLarge:     base.titleLarge?.copyWith(color: textPrimary,     fontWeight: FontWeight.w800, fontSize: 13, letterSpacing: 0.5),
+        // H3 - Subheaders, important labels
+        titleMedium:    base.titleMedium?.copyWith(color: textPrimary,    fontWeight: FontWeight.w700, fontSize: 12),
+        titleSmall:     base.titleSmall?.copyWith(color: textSecondary,   fontWeight: FontWeight.w600, fontSize: 11),
+        
+        // Body Text
+        bodyLarge:      base.bodyLarge?.copyWith(color: textPrimary,      fontWeight: FontWeight.w600, fontSize: 12),
+        bodyMedium:     base.bodyMedium?.copyWith(color: textPrimary,     fontWeight: FontWeight.w500, fontSize: 11),
+        bodySmall:      base.bodySmall?.copyWith(color: textSecondary,    fontWeight: FontWeight.w500, fontSize: 10),
+        
+        // Captions / Small Labels
+        labelLarge:     base.labelLarge?.copyWith(color: textPrimary,     fontWeight: FontWeight.w700, fontSize: 10),
+        labelMedium:    base.labelMedium?.copyWith(color: textSecondary,  fontWeight: FontWeight.w600, fontSize: 9),
+        labelSmall:     base.labelSmall?.copyWith(color: textSecondary,   fontWeight: FontWeight.w600, fontSize: 8),
+        
+        // Unused/Larger displays - optionally keep scaled if ever used, but fallback to 28+
+        displayLarge:   base.displayLarge?.copyWith(color: textPrimary,   fontWeight: FontWeight.w800, fontSize: 26),
+        displayMedium:  base.displayMedium?.copyWith(color: textPrimary,  fontWeight: FontWeight.w800, fontSize: 22),
+        headlineMedium: base.headlineMedium?.copyWith(color: textPrimary, fontWeight: FontWeight.w800, fontSize: 16),
+        headlineSmall:  base.headlineSmall?.copyWith(color: textPrimary,  fontWeight: FontWeight.w700, fontSize: 14),
       ),
     );
   }

@@ -48,12 +48,18 @@ class BayadTrackApp extends StatelessWidget {
       themeMode: themeProvider.themeMode,
 
       // builder wraps every screen so MediaQuery carries the font scale.
-      // This means ALL Text widgets in the app resize when fontScale changes
-      // without needing to pass the value manually anywhere.
+      // We calculate a responsive scale factor based on screen width.
       builder: (context, child) {
+        final mediaQueryData = MediaQuery.of(context);
+        final screenWidth = mediaQueryData.size.width;
+        
+        // Base design width is around 375 logical pixels
+        // Clamp between 0.85 and 1.15 to prevent text from getting too large on wider phones
+        final double scaleFactor = (screenWidth / 375.0).clamp(0.85, 1.15);
+
         return MediaQuery(
-          data: MediaQuery.of(context).copyWith(
-            textScaler: TextScaler.linear(themeProvider.fontScale),
+          data: mediaQueryData.copyWith(
+            textScaler: TextScaler.linear(scaleFactor),
           ),
           child: child!,
         );

@@ -10,16 +10,13 @@ import 'package:shared_preferences/shared_preferences.dart';
 class ThemeProvider extends ChangeNotifier {
   // SharedPreferences keys
   static const _kThemeMode = 'bt_theme_mode'; // stores ThemeMode.index (0/1/2)
-  static const _kFontScale = 'bt_font_scale'; // stores double
   static const _kUsePoppins = 'bt_use_poppins'; // stores bool
 
   ThemeMode _themeMode = ThemeMode.system;
-  double    _fontScale  = 1.0;
   bool      _usePoppins = true;
 
   // ── Getters ─────────────────────────────────────────────────────────────────
   ThemeMode get themeMode => _themeMode;
-  double    get fontScale => _fontScale;
   bool      get usePoppins => _usePoppins;
 
   // ── init: call once at startup (before runApp) ───────────────────────────────
@@ -29,7 +26,6 @@ class ThemeProvider extends ChangeNotifier {
     final prefs = await SharedPreferences.getInstance();
     // ThemeMode.values = [system(0), light(1), dark(2)]
     _themeMode = ThemeMode.values[prefs.getInt(_kThemeMode) ?? 0];
-    _fontScale  = prefs.getDouble(_kFontScale) ?? 1.0;
     _usePoppins = prefs.getBool(_kUsePoppins) ?? true;
     // No notifyListeners() needed here — the widget tree isn't built yet
   }
@@ -44,18 +40,6 @@ class ThemeProvider extends ChangeNotifier {
     await prefs.setInt(_kThemeMode, mode.index);
   }
 
-  // ── Font Scale ───────────────────────────────────────────────────────────────
-  /// Available font scales:
-  ///   1.0 → A   (Normal)
-  ///   1.2 → A+  (Large)
-  ///   1.4 → A++ (Extra Large)
-  Future<void> setFontScale(double scale) async {
-    if (_fontScale == scale) return;
-    _fontScale = scale;
-    notifyListeners(); // all Text widgets re-render instantly via MediaQuery
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setDouble(_kFontScale, scale);
-  }
 
   // ── Font Family ──────────────────────────────────────────────────────────────
   /// Switch between Poppins and System Font

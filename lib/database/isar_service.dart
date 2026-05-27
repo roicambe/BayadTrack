@@ -38,12 +38,13 @@ class IsarService {
         inspector: true, // lets you inspect DB in Isar Inspector (dev tool)
       );
 
-      // Seed or reset fee ranges if count is not 15 (ensures Nanay gets exactly the correct 15 ranges)
-      if (await isar.feeRanges.count() != 15) {
+      // Seed or reset fee ranges if count is not 16 (ensures Nanay gets exactly the correct 16 ranges)
+      if (await isar.feeRanges.count() != 16) {
         await isar.writeTxn(() async {
           await isar.feeRanges.clear();
           await isar.feeRanges.putAll([
-            FeeRange()..minAmount = 1..maxAmount = 1000..fee = 15,
+            FeeRange()..minAmount = 1..maxAmount = 100..fee = 10,
+            FeeRange()..minAmount = 101..maxAmount = 1000..fee = 15,
             FeeRange()..minAmount = 1001..maxAmount = 2000..fee = 20,
             FeeRange()..minAmount = 2001..maxAmount = 3000..fee = 30,
             FeeRange()..minAmount = 3001..maxAmount = 4000..fee = 40,
@@ -204,6 +205,22 @@ class IsarService {
     final isar = await db;
     await isar.writeTxn(() async {
       await isar.transactionRecords.delete(id);
+    });
+  }
+
+  // ─────────────────────────────────────────────
+  // UPDATE STATUS
+  // ─────────────────────────────────────────────
+
+  /// Toggles the settled status of a transaction
+  Future<void> toggleSettled(int id) async {
+    final isar = await db;
+    await isar.writeTxn(() async {
+      final record = await isar.transactionRecords.get(id);
+      if (record != null) {
+        record.isSettled = !record.isSettled;
+        await isar.transactionRecords.put(record);
+      }
     });
   }
 

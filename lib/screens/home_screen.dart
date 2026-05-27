@@ -1,9 +1,11 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:fl_chart/fl_chart.dart';
 import '../theme/app_colors.dart';
 import '../database/transaction_model.dart';
 import '../database/isar_service.dart';
+import '../widgets/sky_background.dart';
 
 enum ChartPeriod { week, month, year }
 
@@ -21,17 +23,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Platform _selectedEarningsPlatform = Platform.gcash;
   int _activeInsightTab = 0;
 
-  // Masking helper matching global patterns
-  String _maskName(String name) {
-    if (name.trim().isEmpty) return 'Unknown';
-    final trimmed = name.trim();
-    if (trimmed.length <= 2) return trimmed;
-    final parts = trimmed.split(' ');
-    return parts.map((part) {
-      if (part.length <= 2) return part;
-      return '${part[0]}${part[1]}••${part[part.length - 1]}';
-    }).join(' ');
-  }
+
 
   @override
   Widget build(BuildContext context) {
@@ -44,7 +36,8 @@ class _HomeScreenState extends State<HomeScreen> {
       decimalDigits: 2,
     );
 
-    return SafeArea(
+    return SkyBackground(
+      child: SafeArea(
       child: StreamBuilder<List<TransactionRecord>>(
         stream: _db.listenToTransactions(),
         builder: (context, snapshot) {
@@ -95,18 +88,8 @@ class _HomeScreenState extends State<HomeScreen> {
               : hour < 18
                   ? 'Good Afternoon, Mommy!'
                   : 'Good Evening, Mommy!';
-          DateTime periodStart;
-          switch (_selectedPeriod) {
-            case ChartPeriod.week:
-              periodStart = DateTime(now.year, now.month, now.day).subtract(const Duration(days: 6));
-              break;
-            case ChartPeriod.month:
-              periodStart = DateTime(now.year, now.month, now.day).subtract(const Duration(days: 29));
-              break;
-            case ChartPeriod.year:
-              periodStart = DateTime(now.year, now.month, 1).subtract(const Duration(days: 365));
-              break;
-          }
+
+
 
           // Calculate insightsPeriodStart based on _insightsPeriod
           DateTime insightsPeriodStart;
@@ -189,23 +172,39 @@ class _HomeScreenState extends State<HomeScreen> {
                         children: [
                           Text(
                             greeting,
-                            style: theme.textTheme.headlineSmall?.copyWith(
-                              fontWeight: FontWeight.w800,
+                            style: theme.textTheme.headlineLarge?.copyWith(
                               letterSpacing: -0.5,
+                              color: Colors.white,
+                              shadows: const [
+                                Shadow(color: Color(0x88000000), blurRadius: 8, offset: Offset(0, 2)),
+                              ],
                             ),
                             overflow: TextOverflow.ellipsis,
                             maxLines: 2,
                           ),
                           const SizedBox(height: 4),
-                          Text(
-                            DateFormat('EEEE, MMMM d, yyyy').format(now),
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: theme.colorScheme.onSurface.withValues(alpha: 0.55),
-                              fontWeight: FontWeight.w600,
+                            Text(
+                              DateFormat('EEEE, MMMM d, yyyy').format(now),
+                              style: theme.textTheme.titleLarge?.copyWith(
+                                color: Colors.white.withValues(alpha: 0.85),
+                                fontWeight: FontWeight.w600,
+                                shadows: const [
+                                  Shadow(color: Color(0x88000000), blurRadius: 6),
+                                ],
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                              maxLines: 1,
                             ),
-                            overflow: TextOverflow.ellipsis,
-                            maxLines: 1,
-                          ),
+                            const SizedBox(height: 2),
+                            _LiveClock(
+                              textStyle: theme.textTheme.titleMedium?.copyWith(
+                                color: Colors.white.withValues(alpha: 0.80),
+                                fontWeight: FontWeight.w600,
+                                shadows: const [
+                                  Shadow(color: Color(0x88000000), blurRadius: 6),
+                                ],
+                              ),
+                            ),
                         ],
                       ),
                     ),
@@ -213,12 +212,12 @@ class _HomeScreenState extends State<HomeScreen> {
                     Container(
                       padding: const EdgeInsets.all(10),
                       decoration: BoxDecoration(
-                        color: theme.colorScheme.primaryContainer.withValues(alpha: 0.2),
+                        color: Colors.white.withValues(alpha: 0.15),
                         shape: BoxShape.circle,
                       ),
-                      child: Icon(
+                      child: const Icon(
                         Icons.insights_rounded,
-                        color: theme.colorScheme.primary,
+                        color: Colors.white,
                         size: 22,
                       ),
                     ),
@@ -396,11 +395,11 @@ class _HomeScreenState extends State<HomeScreen> {
                             children: [
                               Container(width: 10, height: 10, decoration: const BoxDecoration(color: AppColors.gcash, shape: BoxShape.circle)),
                               const SizedBox(width: 6),
-                              Text('GCash ${(gcashPercent * 100).toStringAsFixed(0)}%', textScaler: TextScaler.noScaling, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.gcash)),
+                              Text('GCash ${(gcashPercent * 100).toStringAsFixed(0)}%', textScaler: TextScaler.noScaling, style: theme.textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w700, color: AppColors.gcash)),
                               const SizedBox(width: 16),
                               Container(width: 10, height: 10, decoration: const BoxDecoration(color: AppColors.maya, shape: BoxShape.circle)),
                               const SizedBox(width: 6),
-                              Text('Maya ${(mayaPercent * 100).toStringAsFixed(0)}%', textScaler: TextScaler.noScaling, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.maya)),
+                              Text('Maya ${(mayaPercent * 100).toStringAsFixed(0)}%', textScaler: TextScaler.noScaling, style: theme.textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w700, color: AppColors.maya)),
                             ],
                           ),
                           const SizedBox(height: 16),
@@ -438,7 +437,8 @@ class _HomeScreenState extends State<HomeScreen> {
           );
         },
       ),
-    );
+      ), // end SafeArea
+    ); // end SkyBackground
   }
 
   Widget _buildPeriodToggle(ChartPeriod period, String text, ThemeData theme) {
@@ -467,11 +467,9 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
         child: Text(
           text,
-          textScaler: TextScaler.noScaling,
-          style: TextStyle(
+          style: theme.textTheme.labelMedium?.copyWith(
             color: isSelected ? theme.colorScheme.onSurface : theme.colorScheme.onSurface.withValues(alpha: 0.6),
-            fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
-            fontSize: 12,
+            fontWeight: FontWeight.w600,
           ),
         ),
       ),
@@ -504,10 +502,9 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
         child: Text(
           text,
-          style: TextStyle(
+          style: theme.textTheme.labelMedium?.copyWith(
             color: isSelected ? theme.colorScheme.onSurface : theme.colorScheme.onSurface.withValues(alpha: 0.6),
-            fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
-            fontSize: 12,
+            fontWeight: FontWeight.w600,
           ),
         ),
       ),
@@ -551,11 +548,9 @@ class _HomeScreenState extends State<HomeScreen> {
               const SizedBox(height: 4),
               Text(
                 label,
-                textScaler: TextScaler.noScaling,
-                style: TextStyle(
+                style: theme.textTheme.labelMedium?.copyWith(
                   color: isSelected ? activeColor : theme.colorScheme.onSurface.withValues(alpha: 0.6),
-                  fontSize: 11,
-                  fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+                  fontWeight: FontWeight.w600,
                 ),
                 textAlign: TextAlign.center,
               ),
@@ -612,9 +607,8 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
                 child: Text(
                   '$rank',
-                  style: TextStyle(
+                  style: theme.textTheme.labelSmall?.copyWith(
                     color: rankColor,
-                    fontSize: 11,
                     fontWeight: FontWeight.w900,
                   ),
                 ),
@@ -672,10 +666,9 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
         child: Text(
           text,
-          style: TextStyle(
+          style: theme.textTheme.labelMedium?.copyWith(
             color: isSelected ? theme.colorScheme.onSurface : theme.colorScheme.onSurface.withValues(alpha: 0.6),
-            fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
-            fontSize: 12,
+            fontWeight: FontWeight.w600,
           ),
         ),
       ),
@@ -696,10 +689,13 @@ class _SectionLabel extends StatelessWidget {
     final theme = Theme.of(context);
     return Text(
       text.toUpperCase(),
-      style: theme.textTheme.labelMedium?.copyWith(
+      style: theme.textTheme.titleMedium?.copyWith(
+        color: Colors.white,
         fontWeight: FontWeight.w800,
-        letterSpacing: 1.2,
-        color: theme.colorScheme.primary.withValues(alpha: 0.8),
+        letterSpacing: 0.8,
+        shadows: const [
+          Shadow(color: Color(0x99000000), blurRadius: 6, offset: Offset(0, 1)),
+        ],
       ),
     );
   }
@@ -784,9 +780,8 @@ class _BalanceCard extends StatelessWidget {
                   ),
                   child: Text(
                     'LOW',
-                    style: TextStyle(
+                    style: theme.textTheme.labelSmall?.copyWith(
                       color: warningColor,
-                      fontSize: 9,
                       fontWeight: FontWeight.w900,
                     ),
                   ),
@@ -807,11 +802,10 @@ class _BalanceCard extends StatelessWidget {
             alignment: Alignment.centerLeft,
             child: Text(
               currencyFormat.format(balance),
-              style: theme.textTheme.titleMedium?.copyWith(
+              style: theme.textTheme.titleLarge?.copyWith(
                 color: isLowBalance ? warningColor : brandColor,
                 fontWeight: FontWeight.w800,
-                fontSize: 18,
-                letterSpacing: -0.5,
+                letterSpacing: 0,
               ),
               overflow: TextOverflow.ellipsis,
               maxLines: 1,
@@ -822,9 +816,8 @@ class _BalanceCard extends StatelessWidget {
             lastUpdated != null
                 ? 'As of ${DateFormat('MMM d, h:mm a').format(lastUpdated!)}'
                 : 'No transactions logged',
-            style: theme.textTheme.bodySmall?.copyWith(
+            style: theme.textTheme.labelSmall?.copyWith(
               color: theme.colorScheme.onSurface.withValues(alpha: 0.40),
-              fontSize: 10,
               fontWeight: FontWeight.w500,
             ),
             overflow: TextOverflow.ellipsis,
@@ -1449,3 +1442,42 @@ class _EarningsBarChartCard extends StatelessWidget {
   }
 }
 
+class _LiveClock extends StatefulWidget {
+  final TextStyle? textStyle;
+  const _LiveClock({this.textStyle});
+
+  @override
+  State<_LiveClock> createState() => _LiveClockState();
+}
+
+class _LiveClockState extends State<_LiveClock> {
+  late Timer _timer;
+  late DateTime _now;
+
+  @override
+  void initState() {
+    super.initState();
+    _now = DateTime.now();
+    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
+      setState(() {
+        _now = DateTime.now();
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      DateFormat('hh:mm:ss a').format(_now),
+      style: widget.textStyle,
+      overflow: TextOverflow.ellipsis,
+      maxLines: 1,
+    );
+  }
+}

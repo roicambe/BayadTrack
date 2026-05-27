@@ -29,7 +29,6 @@ class _TabTransitionSwitcher extends StatefulWidget {
   final List<Widget> children;
 
   const _TabTransitionSwitcher({
-    super.key,
     required this.selectedIndex,
     required this.children,
   });

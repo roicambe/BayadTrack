@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 
@@ -201,6 +200,7 @@ class DataScreenState extends State<DataScreen>
               // ── Swipeable tab content ──────────────────────────────────────
               Expanded(
                 child: TabBarView(
+                  physics: const NeverScrollableScrollPhysics(),
                   controller: _tabController,
                   children: List.generate(
                     2,
@@ -295,17 +295,14 @@ class _MinimalTabBar extends StatelessWidget {
                 ),
                 child: AnimatedDefaultTextStyle(
                   duration: const Duration(milliseconds: 200),
-                  style: TextStyle(
-                    fontSize: 14,
+                  style: theme.textTheme.titleLarge!.copyWith(
                     fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
                     color: isActive
                         ? color
                         : theme.colorScheme.onSurface.withValues(alpha: 0.35),
-                    fontFamily: theme.textTheme.bodyLarge?.fontFamily,
                   ),
                   child: Text(
                     _labels[i],
-                    textScaler: TextScaler.noScaling,
                   ),
                 ),
               ),
@@ -561,7 +558,6 @@ class _TransactionCard extends StatefulWidget {
 }
 
 class _TransactionCardState extends State<_TransactionCard> {
-  bool _isDeleteMode = false;
   final _db = IsarService();
 
   static const _platformColors = {
@@ -588,28 +584,13 @@ class _TransactionCardState extends State<_TransactionCard> {
     TransactionType.payment: Icons.receipt_rounded,
   };
 
-  Future<void> _confirmDelete() async {
-    final confirmed = await AppDialog.showDeleteConfirmation(
-      context,
-      title: 'Delete Transaction?',
-      content: 'Are you sure you want to permanently delete this transaction record? This cannot be undone.',
-    );
-
-    if (confirmed == true && mounted) {
-      try {
-        await _db.deleteTransaction(widget.record.id);
-        if (!mounted) return;
-        AppToast.success(context, 'Transaction deleted!');
-      } catch (_) {
-        if (!mounted) return;
-        AppToast.error(context, 'Failed to delete transaction.');
-      }
-    }
-    
-    if (mounted) {
-      setState(() {
-        _isDeleteMode = false;
-      });
+  Future<void> _toggleSettled() async {
+    try {
+      await _db.toggleSettled(widget.record.id);
+      // The StreamBuilder will automatically rebuild the list, so we don't need manual setState
+    } catch (_) {
+      if (!mounted) return;
+      AppToast.error(context, 'Failed to update transaction state.');
     }
   }
 
@@ -633,55 +614,112 @@ class _TransactionCardState extends State<_TransactionCard> {
       decimalDigits: 2,
     );
 
-    final cardBgColor = _isDeleteMode
-        ? (isDark ? Colors.red.shade900.withValues(alpha: 0.3) : Colors.red.shade50)
-        : (isDark ? AppColors.darkCard : AppColors.lightCard);
+    final cardBgColor = isDark ? AppColors.darkCard : AppColors.lightCard;
 
-    final cardBorder = _isDeleteMode
-        ? Border.all(color: Colors.red.shade400, width: 1.5)
+    final cardBorder = !widget.record.isSettled
+        ? Border.all(color: Colors.amber.shade500.withValues(alpha: 0.6), width: 1.5)
         : (isDark ? Border.all(color: color.withValues(alpha: 0.18), width: 1) : null);
 
-    return GestureDetector(
-      onLongPress: () {
-        setState(() {
-          _isDeleteMode = true;
-        });
-      },
-      onTap: () {
-        if (_isDeleteMode) {
-          setState(() {
-            _isDeleteMode = false;
-          });
-        } else {
-          _showDetailsSheet(context);
+    return Dismissible(
+      key: ValueKey(widget.record.id),
+      direction: DismissDirection.horizontal,
+      confirmDismiss: (direction) async {
+        if (direction == DismissDirection.endToStart) {
+          // Swipe Left -> Delete
+          final confirmed = await AppDialog.showDeleteConfirmation(
+            context,
+            title: 'Delete Transaction?',
+            content: 'Are you sure you want to permanently delete this transaction record? This cannot be undone.',
+          );
+          if (confirmed == true) {
+            await _db.deleteTransaction(widget.record.id);
+            if (context.mounted) AppToast.success(context, 'Transaction deleted!');
+            return true;
+          }
+          return false;
+        } else if (direction == DismissDirection.startToEnd) {
+          // Swipe Right -> Settle (or Unsettle)
+          await _toggleSettled();
+          return false; // Bounce back
         }
+        return false;
       },
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(18),
-        child: Stack(
-          clipBehavior: Clip.antiAlias,
-          alignment:    Alignment.centerRight,
+      background: Container(
+        margin: const EdgeInsets.symmetric(vertical: 2),
+        decoration: BoxDecoration(
+          color: widget.record.isSettled ? Colors.amber.shade600 : const Color(0xFF00B14F), // Green to settle, Amber to unsettle
+          borderRadius: BorderRadius.circular(18),
+        ),
+        alignment: Alignment.centerLeft,
+        padding: const EdgeInsets.only(left: 24),
+        child: Row(
           children: [
-            // Standard Card Container (Constant width/height, does not shift)
-            AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              curve:    Curves.easeInOut,
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color:        cardBgColor,
-                borderRadius: BorderRadius.circular(18),
-                border:       cardBorder,
-                boxShadow: isDark || _isDeleteMode
-                    ? null
-                    : [
-                        BoxShadow(
-                          color:      Colors.black.withValues(alpha: 0.05),
-                          blurRadius: 10,
-                          offset:     const Offset(0, 3),
-                        ),
-                      ],
+            Icon(
+              widget.record.isSettled ? Icons.undo_rounded : Icons.check_circle_outline_rounded,
+              color: Colors.white,
+              size: 28,
+            ),
+            const SizedBox(width: 8),
+            Text(
+              widget.record.isSettled ? 'Mark Pending' : 'Settle',
+              style: theme.textTheme.titleMedium?.copyWith(
+                color: Colors.white,
+                fontWeight: FontWeight.w700,
               ),
-              child: Row(
+            ),
+          ],
+        ),
+      ),
+      secondaryBackground: Container(
+        margin: const EdgeInsets.symmetric(vertical: 2),
+        decoration: BoxDecoration(
+          color: Colors.red.shade600,
+          borderRadius: BorderRadius.circular(18),
+        ),
+        alignment: Alignment.centerRight,
+        padding: const EdgeInsets.only(right: 24),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.end,
+          children: [
+            Text(
+              'Delete',
+              style: theme.textTheme.titleMedium?.copyWith(
+                color: Colors.white,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(width: 8),
+            const Icon(
+              Icons.delete_forever_rounded,
+              color: Colors.white,
+              size: 28,
+            ),
+          ],
+        ),
+      ),
+      child: GestureDetector(
+        onTap: () => _showDetailsSheet(context),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(18),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            curve: Curves.easeInOut,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: cardBgColor,
+              borderRadius: BorderRadius.circular(18),
+              border: cardBorder,
+              boxShadow: isDark
+                  ? null
+                  : [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.05),
+                        blurRadius: 10,
+                        offset: const Offset(0, 3),
+                      ),
+                    ],
+            ),
+            child: Row(
                 children: [
                   Container(
                     width: 46,
@@ -707,7 +745,7 @@ class _TransactionCardState extends State<_TransactionCard> {
                             Flexible(
                               child: Text(
                                 widget.record.senderName ?? 'Unknown Recipient',
-                                style: theme.textTheme.titleSmall?.copyWith(
+                                style: theme.textTheme.bodyLarge?.copyWith(
                                   fontWeight: FontWeight.w700,
                                   color: theme.colorScheme.onSurface,
                                 ),
@@ -721,19 +759,50 @@ class _TransactionCardState extends State<_TransactionCard> {
                                 vertical: 2,
                               ),
                               decoration: BoxDecoration(
-                                color:        color.withValues(alpha: 0.10),
+                                color: color.withValues(alpha: 0.10),
                                 borderRadius: BorderRadius.circular(20),
                               ),
                               child: Text(
                                 _typeLabels[widget.record.transactionType] ?? 'Sent',
                                 textScaler: TextScaler.noScaling,
-                                style: TextStyle(
+                                style: theme.textTheme.labelSmall?.copyWith(
                                   color: color,
-                                  fontSize: 10,
                                   fontWeight: FontWeight.w700,
                                 ),
                               ),
                             ),
+                            if (widget.record.isSettled) ...[
+                              const SizedBox(width: 6),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 6,
+                                  vertical: 2,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF00B14F).withValues(alpha: 0.15),
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Icon(
+                                      Icons.check_circle_rounded,
+                                      color: Color(0xFF00B14F),
+                                      size: 10,
+                                    ),
+                                    const SizedBox(width: 2),
+                                    Text(
+                                      'OK',
+                                      textScaler: TextScaler.noScaling,
+                                      style: theme.textTheme.labelSmall?.copyWith(
+                                        color: const Color(0xFF00B14F),
+                                        fontWeight: FontWeight.w800,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
                           ],
                         ),
                         const SizedBox(height: 3),
@@ -781,9 +850,8 @@ class _TransactionCardState extends State<_TransactionCard> {
                                 child: Text(
                                   '+₱${widget.record.fee!.toStringAsFixed(widget.record.fee! % 1 == 0 ? 0 : 2)}',
                                   textScaler: TextScaler.noScaling,
-                                  style: TextStyle(
+                                  style: theme.textTheme.labelMedium?.copyWith(
                                     color: Colors.purple.shade400,
-                                    fontSize: 12,
                                     fontWeight: FontWeight.w800,
                                   ),
                                 ),
@@ -796,7 +864,6 @@ class _TransactionCardState extends State<_TransactionCard> {
                           DateFormat('MMM d, yyyy • hh:mm a').format(widget.record.timestamp),
                           style: theme.textTheme.bodySmall?.copyWith(
                             color: theme.colorScheme.onSurface.withValues(alpha: 0.40),
-                            fontSize: 11,
                           ),
                           overflow: TextOverflow.ellipsis,
                           maxLines: 1,
@@ -808,36 +875,6 @@ class _TransactionCardState extends State<_TransactionCard> {
               ),
             ),
 
-            // Animated Delete Button Overlay (Slides from right to left on top of the card)
-            AnimatedPositioned(
-              duration: const Duration(milliseconds: 250),
-              curve:    Curves.easeOutCubic,
-              right:    _isDeleteMode ? 14 : -70, // slides outside the clipped card area
-              child: GestureDetector(
-                onTap: _confirmDelete,
-                child: Container(
-                  width:    44,
-                  height:   44,
-                  decoration: BoxDecoration(
-                    color: Colors.red.shade600,
-                    shape: BoxShape.circle,
-                    boxShadow: [
-                      BoxShadow(
-                        color:      Colors.black.withValues(alpha: 0.25),
-                        blurRadius: 6,
-                        offset:     const Offset(0, 2),
-                      ),
-                    ],
-                  ),
-                  child: const Icon(
-                    Icons.delete_forever_rounded,
-                    color: Colors.white,
-                    size:  24,
-                  ),
-                ),
-              ),
-            ),
-          ],
         ),
       ),
     );
@@ -1105,10 +1142,9 @@ class _TransactionDetailsSheetState extends State<_TransactionDetailsSheet> {
                 ),
                 child: Text(
                   _platformNames[widget.record.platform] ?? 'Unknown',
-                  style: TextStyle(
+                  style: theme.textTheme.labelLarge?.copyWith(
                     color: color,
                     fontWeight: FontWeight.w800,
-                    fontSize: 14,
                   ),
                 ),
               ),
@@ -1116,9 +1152,8 @@ class _TransactionDetailsSheetState extends State<_TransactionDetailsSheet> {
 
               Text(
                 'Edit Transaction Details',
-                style: theme.textTheme.titleMedium?.copyWith(
+                style: theme.textTheme.titleLarge?.copyWith(
                   fontWeight: FontWeight.w800,
-                  fontSize: 18,
                 ),
               ),
               const SizedBox(height: 14),
@@ -1181,7 +1216,7 @@ class _TransactionDetailsSheetState extends State<_TransactionDetailsSheet> {
                     Row(
                       children: [
                         Expanded(
-                          flex: 3,
+                          flex: 1,
                           child: _EditField(
                             label: 'Amount',
                             controller: _amountController,
@@ -1194,7 +1229,7 @@ class _TransactionDetailsSheetState extends State<_TransactionDetailsSheet> {
                         ),
                         const SizedBox(width: 12),
                         Expanded(
-                          flex: 2,
+                          flex: 1,
                           child: _EditField(
                             label: 'Service Fee',
                             controller: _feeController,
@@ -1820,7 +1855,7 @@ class _ConfirmEntrySheetState extends State<_ConfirmEntrySheet> {
                     Row(
                       children: [
                         Expanded(
-                          flex: 3,
+                          flex: 1,
                           child: _EditField(
                             label: 'Amount',
                             controller: _amountController,
@@ -1833,7 +1868,7 @@ class _ConfirmEntrySheetState extends State<_ConfirmEntrySheet> {
                         ),
                         const SizedBox(width: 12),
                         Expanded(
-                          flex: 2,
+                          flex: 1,
                           child: _EditField(
                             label: 'Service Fee',
                             controller: _feeController,
