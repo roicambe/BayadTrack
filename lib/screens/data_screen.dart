@@ -568,13 +568,6 @@ class _TransactionCardState extends State<_TransactionCard> {
     Platform.other: Color(0xFF888888),
   };
 
-  static const _typeLabels = {
-    TransactionType.sent: 'Sent',
-    TransactionType.received: 'Received',
-    TransactionType.cashIn: 'Cash In',
-    TransactionType.cashOut: 'Cash Out',
-    TransactionType.payment: 'Payment',
-  };
 
   static const _typeIcons = {
     TransactionType.sent: Icons.arrow_upward_rounded,
@@ -582,6 +575,15 @@ class _TransactionCardState extends State<_TransactionCard> {
     TransactionType.cashIn: Icons.add_card_rounded,
     TransactionType.cashOut: Icons.money_off_rounded,
     TransactionType.payment: Icons.receipt_rounded,
+  };
+
+  // Icon foreground colors per transaction type
+  static const _typeIconColors = {
+    TransactionType.sent:     Color(0xFF1976D2), // blue — money going out
+    TransactionType.received: Color(0xFF2E7D32), // green — money coming in
+    TransactionType.cashIn:   Color(0xFF0288D1), // light blue
+    TransactionType.cashOut:  Color(0xFFF57C00), // orange
+    TransactionType.payment:  Color(0xFF6A1B9A), // purple
   };
 
   Future<void> _toggleSettled() async {
@@ -616,16 +618,23 @@ class _TransactionCardState extends State<_TransactionCard> {
 
     final cardBgColor = isDark ? AppColors.darkCard : AppColors.lightCard;
 
-    final cardBorder = !widget.record.isSettled
+    // "Pending" amber border only applies to unsettled RECEIVED transactions
+    final isReceived = widget.record.transactionType == TransactionType.received;
+    final isPendingReceived = isReceived && !widget.record.isSettled;
+
+    final cardBorder = isPendingReceived
         ? Border.all(color: Colors.amber.shade500.withValues(alpha: 0.6), width: 1.5)
         : (isDark ? Border.all(color: color.withValues(alpha: 0.18), width: 1) : null);
 
+    // Per-type icon color (overrides platform color for the icon)
+    final iconColor = _typeIconColors[widget.record.transactionType] ?? color;
+
     return Dismissible(
       key: ValueKey(widget.record.id),
-      direction: DismissDirection.horizontal,
+      direction: isReceived ? DismissDirection.horizontal : DismissDirection.endToStart,
       confirmDismiss: (direction) async {
         if (direction == DismissDirection.endToStart) {
-          // Swipe Left -> Delete
+          // Swipe Left → Delete
           final confirmed = await AppDialog.showDeleteConfirmation(
             context,
             title: 'Delete Transaction?',
@@ -637,17 +646,17 @@ class _TransactionCardState extends State<_TransactionCard> {
             return true;
           }
           return false;
-        } else if (direction == DismissDirection.startToEnd) {
-          // Swipe Right -> Settle (or Unsettle)
+        } else if (direction == DismissDirection.startToEnd && isReceived) {
+          // Swipe Right → Settle (only for received)
           await _toggleSettled();
           return false; // Bounce back
         }
         return false;
       },
-      background: Container(
+      background: isReceived ? Container(
         margin: const EdgeInsets.symmetric(vertical: 2),
         decoration: BoxDecoration(
-          color: widget.record.isSettled ? Colors.amber.shade600 : const Color(0xFF00B14F), // Green to settle, Amber to unsettle
+          color: widget.record.isSettled ? Colors.amber.shade600 : const Color(0xFF00B14F),
           borderRadius: BorderRadius.circular(18),
         ),
         alignment: Alignment.centerLeft,
@@ -669,7 +678,7 @@ class _TransactionCardState extends State<_TransactionCard> {
             ),
           ],
         ),
-      ),
+      ) : const SizedBox.shrink(),
       secondaryBackground: Container(
         margin: const EdgeInsets.symmetric(vertical: 2),
         decoration: BoxDecoration(
@@ -704,7 +713,6 @@ class _TransactionCardState extends State<_TransactionCard> {
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 200),
             curve: Curves.easeInOut,
-            padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
               color: cardBgColor,
               borderRadius: BorderRadius.circular(18),
@@ -719,18 +727,22 @@ class _TransactionCardState extends State<_TransactionCard> {
                       ),
                     ],
             ),
-            child: Row(
+            child: Stack(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Row(
                 children: [
                   Container(
                     width: 46,
                     height: 46,
                     decoration: BoxDecoration(
-                      color:        color.withValues(alpha: 0.12),
+                      color: iconColor.withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(13),
                     ),
                     child: Icon(
                       _typeIcons[widget.record.transactionType] ?? Icons.swap_horiz_rounded,
-                      color: color,
+                      color: iconColor,
                       size: 22,
                     ),
                   ),
@@ -740,70 +752,13 @@ class _TransactionCardState extends State<_TransactionCard> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Row(
-                          children: [
-                            Flexible(
-                              child: Text(
-                                widget.record.senderName ?? 'Unknown Recipient',
-                                style: theme.textTheme.bodyLarge?.copyWith(
-                                  fontWeight: FontWeight.w700,
-                                  color: theme.colorScheme.onSurface,
-                                ),
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 7,
-                                vertical: 2,
-                              ),
-                              decoration: BoxDecoration(
-                                color: color.withValues(alpha: 0.10),
-                                borderRadius: BorderRadius.circular(20),
-                              ),
-                              child: Text(
-                                _typeLabels[widget.record.transactionType] ?? 'Sent',
-                                textScaler: TextScaler.noScaling,
-                                style: theme.textTheme.labelSmall?.copyWith(
-                                  color: color,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                            ),
-                            if (widget.record.isSettled) ...[
-                              const SizedBox(width: 6),
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 6,
-                                  vertical: 2,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFF00B14F).withValues(alpha: 0.15),
-                                  borderRadius: BorderRadius.circular(20),
-                                ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    const Icon(
-                                      Icons.check_circle_rounded,
-                                      color: Color(0xFF00B14F),
-                                      size: 10,
-                                    ),
-                                    const SizedBox(width: 2),
-                                    Text(
-                                      'OK',
-                                      textScaler: TextScaler.noScaling,
-                                      style: theme.textTheme.labelSmall?.copyWith(
-                                        color: const Color(0xFF00B14F),
-                                        fontWeight: FontWeight.w800,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ],
+                        Text(
+                          widget.record.senderName ?? 'Unknown Recipient',
+                          style: theme.textTheme.bodyLarge?.copyWith(
+                            fontWeight: FontWeight.w700,
+                            color: theme.colorScheme.onSurface,
+                          ),
+                          overflow: TextOverflow.ellipsis,
                         ),
                         const SizedBox(height: 3),
                         Text(
@@ -873,6 +828,50 @@ class _TransactionCardState extends State<_TransactionCard> {
                   ),
                 ],
               ),
+            ),
+
+                // Sleek Top-Right Corner Badge
+                if (isReceived && widget.record.isSettled)
+                  Positioned(
+                    top: 0,
+                    right: 0,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: const BoxDecoration(
+                        color: Color(0xFF00B14F),
+                        borderRadius: BorderRadius.only(
+                          topRight: Radius.circular(18), // Match card border radius
+                          bottomLeft: Radius.circular(12),
+                        ),
+                        boxShadow: [
+                          BoxShadow(color: Color(0x3300B14F), blurRadius: 4, offset: Offset(-1, 1)),
+                        ],
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(
+                            Icons.check_circle_rounded,
+                            color: Colors.white,
+                            size: 12,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            'SETTLED',
+                            textScaler: TextScaler.noScaling,
+                            style: theme.textTheme.labelSmall?.copyWith(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 0.5,
+                              fontSize: 10,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+              ],
+            ),
             ),
 
         ),
@@ -1164,16 +1163,16 @@ class _TransactionDetailsSheetState extends State<_TransactionDetailsSheet> {
                 child: SizedBox(
                   width: double.infinity,
                   child: SegmentedButton<TransactionType>(
-                    segments: const [
+                    segments: [
                       ButtonSegment(
                         value: TransactionType.sent,
-                        label: Text('Sent'),
-                        icon: Icon(Icons.arrow_upward_rounded, size: 18),
+                        label: const Text('Sent'),
+                        icon: const Icon(Icons.arrow_upward_rounded, size: 18),
                       ),
                       ButtonSegment(
                         value: TransactionType.received,
-                        label: Text('Received'),
-                        icon: Icon(Icons.arrow_downward_rounded, size: 18),
+                        label: const Text('Received'),
+                        icon: const Icon(Icons.arrow_downward_rounded, size: 18),
                       ),
                     ],
                     selected: {_transactionType},
@@ -1183,9 +1182,18 @@ class _TransactionDetailsSheetState extends State<_TransactionDetailsSheet> {
                       });
                     },
                     style: SegmentedButton.styleFrom(
-                      selectedBackgroundColor: color.withValues(alpha: 0.15),
-                      selectedForegroundColor: color,
-                      side: BorderSide(color: color.withValues(alpha: 0.3), width: 1.5),
+                      selectedBackgroundColor: (_transactionType == TransactionType.received
+                          ? const Color(0xFF2E7D32)
+                          : const Color(0xFF1976D2)).withValues(alpha: 0.14),
+                      selectedForegroundColor: _transactionType == TransactionType.received
+                          ? const Color(0xFF2E7D32)
+                          : const Color(0xFF1976D2),
+                      side: BorderSide(
+                        color: (_transactionType == TransactionType.received
+                            ? const Color(0xFF2E7D32)
+                            : const Color(0xFF1976D2)).withValues(alpha: 0.35),
+                        width: 1.5,
+                      ),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
                       ),
