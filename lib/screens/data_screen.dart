@@ -47,6 +47,15 @@ class DataScreenState extends State<DataScreen>
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
+    _cleanupMockData();
+  }
+
+  Future<void> _cleanupMockData() async {
+    final all = await _db.getAllTransactions();
+    final mocks = all.where((t) => t.referenceNumber.startsWith('MOCK')).toList();
+    for (var mock in mocks) {
+      await _db.deleteTransaction(mock.id);
+    }
   }
 
   @override
@@ -58,7 +67,17 @@ class DataScreenState extends State<DataScreen>
   // ── External API (called by MainShell share-intent handler) ───────────────
 
   Future<void> processSharedText(String rawText) async {
-    final receipt = ReceiptParser.parse(rawText);
+    final receipts = ReceiptParser.parseBatch(rawText);
+    if (receipts.isEmpty) {
+      AppToast.error(context, 'No valid transaction found in shared text.');
+      return;
+    }
+    if (receipts.length > 1) {
+      AppToast.error(context, 'Please share only 1 transaction at a time.');
+      return;
+    }
+    
+    final receipt = receipts.first;
     _autoSwitchTab(receipt.platform);
     if (!mounted) return;
     await _showConfirmDialog(receipt);
@@ -112,15 +131,28 @@ class DataScreenState extends State<DataScreen>
     }
   }
 
-  Future<void> _openPasteDialog() async {
+  Future<void> _openPasteDialog(Platform platform) async {
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (ctx) => _PasteTextSheet(
+        platform: platform,
         onSubmit: (text) async {
           Navigator.pop(ctx);
-          final receipt = ReceiptParser.parse(text);
+          final receipts = ReceiptParser.parseBatch(text, platformHint: platform);
+          if (receipts.isEmpty) {
+            AppToast.error(context, 'No valid transaction found in text.');
+            return;
+          }
+
+          if (receipts.length > 1) {
+            AppToast.error(context, 'Please paste only 1 transaction at a time.');
+            return;
+          }
+
+          // Single transaction workflow
+          final receipt = receipts.first;
           _autoSwitchTab(receipt.platform);
           await _showConfirmDialog(receipt);
         },
@@ -152,12 +184,17 @@ class DataScreenState extends State<DataScreen>
 
   /// Opens the FAB action sheet, awaits the selection, then runs the action.
   Future<void> _openAddActionSheet() async {
+    final platform = _tabPlatforms[_tabController.index];
     final color = _tabColors[_tabController.index];
+    final allowUpload = platform == Platform.gcash;
+
     final action = await showModalBottomSheet<String>(
       context: context,
       backgroundColor: Colors.transparent,
       builder: (ctx) => _AddActionSheet(
+        platform: platform,
         activeColor: color,
+        allowUpload: allowUpload,
         onUpload: () => Navigator.pop(ctx, 'upload'),
         onPaste: () => Navigator.pop(ctx, 'paste'),
       ),
@@ -172,7 +209,7 @@ class DataScreenState extends State<DataScreen>
     if (action == 'upload') {
       await _pickImageFromGallery();
     } else {
-      await _openPasteDialog();
+      await _openPasteDialog(platform);
     }
   }
 
@@ -318,7 +355,7 @@ class _MinimalTabBar extends StatelessWidget {
 // _PlatformTabContent — filtered list + thin scanning indicator
 // ─────────────────────────────────────────────────────────────────────────────
 
-class _PlatformTabContent extends StatelessWidget {
+class _PlatformTabContent extends StatefulWidget {
   final Platform platform;
   final Color brandColor;
   final IsarService db;
@@ -332,17 +369,25 @@ class _PlatformTabContent extends StatelessWidget {
   });
 
   @override
+  State<_PlatformTabContent> createState() => _PlatformTabContentState();
+}
+
+class _PlatformTabContentState extends State<_PlatformTabContent> {
+  int _currentPage = 1;
+  static const int _itemsPerPage = 30;
+
+  @override
   Widget build(BuildContext context) {
     return Column(
       children: [
         // 2px scanning progress bar at the very top of the content area
         AnimatedSwitcher(
           duration: const Duration(milliseconds: 250),
-          child: isScanning
+          child: widget.isScanning
               ? LinearProgressIndicator(
                   key: const ValueKey('scanning'),
-                  color: brandColor,
-                  backgroundColor: brandColor.withValues(alpha: 0.1),
+                  color: widget.brandColor,
+                  backgroundColor: widget.brandColor.withValues(alpha: 0.1),
                   minHeight: 2,
                 )
               : const SizedBox(height: 2, key: ValueKey('idle')),
@@ -350,24 +395,82 @@ class _PlatformTabContent extends StatelessWidget {
 
         Expanded(
           child: StreamBuilder<List<TransactionRecord>>(
-            stream: db.listenToTransactions().map(
-              (all) => all.where((r) => r.platform == platform).toList(),
+            stream: widget.db.listenToTransactions().map(
+              (all) => all.where((r) => r.platform == widget.platform).toList(),
             ),
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) {
                 return Center(
-                  child: CircularProgressIndicator(color: brandColor),
+                  child: CircularProgressIndicator(color: widget.brandColor),
                 );
               }
-              final records = snapshot.data ?? [];
-              if (records.isEmpty) {
-                return _EmptyState(brandColor: brandColor);
+              final allRecords = snapshot.data ?? [];
+              if (allRecords.isEmpty) {
+                return _EmptyState(brandColor: widget.brandColor);
               }
-              return ListView.separated(
+
+              final totalPages = (allRecords.length / _itemsPerPage).ceil();
+              final displayPage = _currentPage.clamp(1, totalPages == 0 ? 1 : totalPages);
+
+              final startIndex = (displayPage - 1) * _itemsPerPage;
+              final endIndex = (startIndex + _itemsPerPage < allRecords.length) 
+                                ? startIndex + _itemsPerPage 
+                                : allRecords.length;
+              final records = allRecords.sublist(startIndex, endIndex);
+
+              final listChildren = <Widget>[];
+              
+              for (int i = 0; i < records.length; i++) {
+                final record = records[i];
+                final bool isFirst = i == 0;
+                bool showDateSeparator = isFirst;
+
+                if (!isFirst) {
+                  final prevRecord = records[i - 1];
+                  final currentDay = DateTime(record.timestamp.year, record.timestamp.month, record.timestamp.day);
+                  final prevDay = DateTime(prevRecord.timestamp.year, prevRecord.timestamp.month, prevRecord.timestamp.day);
+                  if (currentDay != prevDay) {
+                    showDateSeparator = true;
+                  }
+                }
+
+                if (showDateSeparator) {
+                  listChildren.add(
+                    Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (!isFirst) const SizedBox(height: 12),
+                        _DateSeparator(date: record.timestamp),
+                        const SizedBox(height: 16),
+                      ],
+                    ),
+                  );
+                } else if (i > 0) {
+                  listChildren.add(const SizedBox(height: 10)); // Card separator
+                }
+
+                listChildren.add(_TransactionCard(record: record));
+              }
+              
+              if (totalPages > 1) {
+                listChildren.add(const SizedBox(height: 28));
+                listChildren.add(
+                  _PaginationControls(
+                    currentPage: displayPage,
+                    totalPages: totalPages,
+                    brandColor: widget.brandColor,
+                    onPageChanged: (page) {
+                      setState(() {
+                        _currentPage = page;
+                      });
+                    },
+                  )
+                );
+              }
+
+              return ListView(
                 padding: EdgeInsets.fromLTRB(20, 14, 20, MediaQuery.of(context).padding.bottom + 180),
-                itemCount: records.length,
-                separatorBuilder: (ctx2, idx) => const SizedBox(height: 10),
-                itemBuilder: (_, i) => _TransactionCard(record: records[i]),
+                children: listChildren,
               );
             },
           ),
@@ -378,16 +481,157 @@ class _PlatformTabContent extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// _PaginationControls
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _PaginationControls extends StatelessWidget {
+  final int currentPage;
+  final int totalPages;
+  final Color brandColor;
+  final ValueChanged<int> onPageChanged;
+
+  const _PaginationControls({
+    required this.currentPage,
+    required this.totalPages,
+    required this.brandColor,
+    required this.onPageChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    List<dynamic> pageItems = [];
+    
+    if (totalPages <= 5) {
+      for (int i = 1; i <= totalPages; i++) {
+        pageItems.add(i);
+      }
+    } else {
+      pageItems.add(1);
+
+      int start = currentPage - 1;
+      int end = currentPage + 1;
+
+      if (currentPage <= 3) {
+        start = 2;
+        end = 4;
+      } else if (currentPage >= totalPages - 2) {
+        start = totalPages - 3;
+        end = totalPages - 1;
+      }
+
+      if (start > 2) {
+        pageItems.add('...');
+      }
+
+      for (int i = start; i <= end; i++) {
+        pageItems.add(i);
+      }
+
+      if (end < totalPages - 1) {
+        pageItems.add('...');
+      }
+
+      pageItems.add(totalPages);
+    }
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 12.0),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          // Previous button
+          IconButton(
+            icon: const Icon(Icons.chevron_left_rounded),
+            color: currentPage > 1 ? (isDark ? Colors.white : Colors.black87) : (isDark ? Colors.white30 : Colors.black26),
+            onPressed: currentPage > 1 ? () => onPageChanged(currentPage - 1) : null,
+          ),
+          
+          // Page numbers
+          ...pageItems.map((item) {
+            if (item == '...') {
+              return Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 6.0),
+                child: Text(
+                  '...',
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    color: isDark ? Colors.white54 : Colors.black54,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              );
+            }
+            
+            final pageNum = item as int;
+            final isSelected = pageNum == currentPage;
+            
+            return Container(
+              margin: const EdgeInsets.symmetric(horizontal: 4.0),
+              width: 36,
+              height: 36,
+              child: Material(
+                color: isSelected ? brandColor : Colors.transparent,
+                shape: CircleBorder(
+                  side: BorderSide(
+                    color: isSelected 
+                        ? brandColor 
+                        : (isDark ? Colors.white24 : Colors.black12),
+                    width: 1.5,
+                  ),
+                ),
+                clipBehavior: Clip.antiAlias,
+                child: InkWell(
+                  onTap: () {
+                    if (!isSelected) onPageChanged(pageNum);
+                  },
+                  splashColor: isSelected ? Colors.black26 : (isDark ? Colors.white30 : Colors.black12),
+                  highlightColor: isSelected ? Colors.black12 : (isDark ? Colors.white12 : Colors.black12),
+                  child: Center(
+                    child: AnimatedDefaultTextStyle(
+                      duration: const Duration(milliseconds: 200),
+                      style: theme.textTheme.titleMedium!.copyWith(
+                        color: isSelected 
+                            ? Colors.white 
+                            : (isDark ? Colors.white70 : Colors.black87),
+                        fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+                      ),
+                      child: Text(pageNum.toString()),
+                    ),
+                  ),
+                ),
+              ),
+            );
+          }),
+
+          // Next button
+          IconButton(
+            icon: const Icon(Icons.chevron_right_rounded),
+            color: currentPage < totalPages ? (isDark ? Colors.white : Colors.black87) : (isDark ? Colors.white30 : Colors.black26),
+            onPressed: currentPage < totalPages ? () => onPageChanged(currentPage + 1) : null,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // _AddActionSheet — compact bottom sheet shown when the FAB is tapped
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _AddActionSheet extends StatelessWidget {
+  final Platform platform;
   final Color activeColor;
+  final bool allowUpload;
   final VoidCallback onUpload;
   final VoidCallback onPaste;
 
   const _AddActionSheet({
+    required this.platform,
     required this.activeColor,
+    required this.allowUpload,
     required this.onUpload,
     required this.onPaste,
   });
@@ -443,17 +687,18 @@ class _AddActionSheet extends StatelessWidget {
             ),
             const SizedBox(height: 8),
 
-            _SheetOption(
-              icon: Icons.photo_library_rounded,
-              title: 'Upload Receipt Image',
-              subtitle: 'Pick from gallery — we read the text automatically',
-              color: activeColor,
-              onTap: onUpload,
-            ),
+            if (allowUpload)
+              _SheetOption(
+                icon: Icons.photo_library_rounded,
+                title: 'Upload Receipt Image',
+                subtitle: 'Pick from gallery — we read the text automatically',
+                color: activeColor,
+                onTap: onUpload,
+              ),
             _SheetOption(
               icon: Icons.content_paste_rounded,
               title: 'Paste Manual Text',
-              subtitle: 'Paste a GCash or Maya notification message',
+              subtitle: 'Paste a ${platform == Platform.gcash ? 'GCash' : 'Maya Business'} notification message',
               color: activeColor,
               onTap: onPaste,
             ),
@@ -541,6 +786,52 @@ class _EmptyState extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// _DateSeparator
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _DateSeparator extends StatelessWidget {
+  final DateTime date;
+  const _DateSeparator({required this.date});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    
+    // Format date like "May 27, 2026"
+    final dateStr = DateFormat.yMMMMd().format(date);
+
+    return Row(
+      children: [
+        Expanded(
+          child: Divider(
+            color: isDark ? Colors.white30 : Colors.black87,
+            thickness: 1.5,
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14.0),
+          child: Text(
+            dateStr,
+            style: theme.textTheme.labelMedium?.copyWith(
+              color: isDark ? Colors.white70 : Colors.black87,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.5,
+            ),
+          ),
+        ),
+        Expanded(
+          child: Divider(
+            color: isDark ? Colors.white30 : Colors.black87,
+            thickness: 1.5,
+          ),
+        ),
+      ],
     );
   }
 }
@@ -1424,8 +1715,9 @@ class _TransactionDetailsSheetState extends State<_TransactionDetailsSheet> {
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _PasteTextSheet extends StatefulWidget {
+  final Platform platform;
   final Future<void> Function(String text) onSubmit;
-  const _PasteTextSheet({required this.onSubmit});
+  const _PasteTextSheet({required this.platform, required this.onSubmit});
 
   @override
   State<_PasteTextSheet> createState() => _PasteTextSheetState();
@@ -1442,6 +1734,16 @@ class _PasteTextSheetState extends State<_PasteTextSheet> {
       final has = _controller.text.trim().isNotEmpty;
       if (has != _hasText) setState(() => _hasText = has);
     });
+  }
+
+  String _getPlatformName(Platform platform) {
+    switch (platform) {
+      case Platform.gcash: return 'GCash';
+      case Platform.maya: return 'Maya Business';
+      case Platform.grabpay: return 'GrabPay';
+      case Platform.shopeepay: return 'ShopeePay';
+      default: return 'Wallet';
+    }
   }
 
   @override
@@ -1482,7 +1784,7 @@ class _PasteTextSheetState extends State<_PasteTextSheet> {
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20),
                 child: Text(
-                  'Paste GCash / Maya Text',
+                  'Paste ${_getPlatformName(widget.platform)} Text',
                   style: theme.textTheme.titleLarge?.copyWith(
                     fontWeight: FontWeight.w700,
                   ),

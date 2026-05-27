@@ -59,13 +59,21 @@ class ParsedReceipt {
 /// Parses raw receipt text (from OCR or clipboard) into a [ParsedReceipt].
 class ReceiptParser {
   // ── Platform detection ──────────────────────────────────────────────────
-  static Platform _detectPlatform(String text) {
+  static Platform _detectPlatform(String text, {Platform? hint}) {
     final lower = text.toLowerCase();
     if (lower.contains('gcash'))     return Platform.gcash;
     if (lower.contains('maya') || lower.contains('paymaya')) return Platform.maya;
+    
+    // Check for Maya-specific formatting patterns
+    if (lower.contains('and biller convenience fee') || 
+        lower.contains('sold allnet') ||
+        RegExp(r'\d{2}\s+[a-z]{3}\s+\d{4}\s+\d{2}:\d{2}\s+[am|pm]+:', caseSensitive: false).hasMatch(lower)) {
+      return Platform.maya;
+    }
+    
     if (lower.contains('grabpay'))   return Platform.grabpay;
     if (lower.contains('shopeepay') || lower.contains('spay')) return Platform.shopeepay;
-    return Platform.gcash; // default: most common usage
+    return hint ?? Platform.gcash; // default to hint, fallback to gcash
   }
 
   // ── Transaction type detection ──────────────────────────────────────────
@@ -76,13 +84,15 @@ class ReceiptParser {
     if (lower.contains('you have received') ||
         lower.contains('you received') ||
         lower.contains('money received') ||
+        lower.contains('received php') ||
         lower.contains('received from')) {
       return TransactionType.received;
     }
     
     // Explicitly check for sent patterns
     if (lower.contains('you have sent') ||
-        lower.contains('successfully sent')) {
+        lower.contains('successfully sent') ||
+        lower.contains('sold ')) { // Maya load purchase
       return TransactionType.sent;
     }
 
@@ -96,6 +106,7 @@ class ReceiptParser {
     }
     if (lower.contains('payment') ||
         lower.contains('paid to') ||
+        lower.contains('you paid') ||
         lower.contains('bills payment')) {
       return TransactionType.payment;
     }
@@ -245,13 +256,27 @@ class ReceiptParser {
       }
     }
 
-    // 2. To/From labeling pattern
+    // 2. Maya-specific patterns (Sent to / Paid to / Sold to)
+    if (rawName == null) {
+      final paidTo = RegExp(r'paid(?:.*?)\s+to\s+([A-Za-z0-9\s]+?)(?:\.|Convenience|\n|$)', caseSensitive: false).firstMatch(text);
+      if (paidTo != null) {
+        rawName = paidTo.group(1)?.trim();
+      }
+    }
+    if (rawName == null) {
+      final promoMatch = RegExp(r'Sold\s+(.+?)\s+to\s+(?:\+?63|0)', caseSensitive: false).firstMatch(text);
+      if (promoMatch != null) {
+        rawName = promoMatch.group(1)?.trim();
+      }
+    }
+
+    // 3. To/From labeling pattern
     if (rawName == null) {
       final toFrom = _toFromRe.firstMatch(text);
       if (toFrom != null) rawName = toFrom.group(1)!.trim();
     }
 
-    // 3. Masked uppercase names pattern
+    // 4. Masked uppercase names pattern
     if (rawName == null) {
       final masked = _nameRe.firstMatch(text);
       if (masked != null) rawName = masked.group(1)!.trim();
@@ -278,6 +303,20 @@ class ReceiptParser {
     );
     
     return cleaned;
+  }
+
+  // ── Fee extraction ────────────────────────────────────────────────────────
+  static final _feeRe = RegExp(
+    r'(?:fee|convenience fee)[\s:]*(?:₱|PHP|Php|P)?\s*([0-9,]+\.[0-9]{2})',
+    caseSensitive: false,
+  );
+
+  static double? _extractFee(String text) {
+    final match = _feeRe.firstMatch(text);
+    if (match != null) {
+      return _parseAmount(match.group(1)!);
+    }
+    return null;
   }
 
   // ── Remaining balance extraction ──────────────────────────────────────────
@@ -383,8 +422,8 @@ class ReceiptParser {
   }
 
   // ── Public API ───────────────────────────────────────────────────────────
-  static ParsedReceipt parse(String rawText) {
-    final platform        = _detectPlatform(rawText);
+  static ParsedReceipt parse(String rawText, {Platform? platformHint}) {
+    final platform        = _detectPlatform(rawText, hint: platformHint);
     final transactionType = _detectType(rawText);
     final amount          = _extractAmount(rawText);
     final referenceNumber = _extractReference(rawText);
@@ -392,6 +431,7 @@ class ReceiptParser {
     final personName      = _extractName(rawText, phoneNumber);
     final transactionDate = _extractDate(rawText);
     final remainingBalance = _extractBalance(rawText);
+    final fee             = _extractFee(rawText);
 
     return ParsedReceipt(
       rawText:          rawText,
@@ -403,6 +443,32 @@ class ReceiptParser {
       phoneNumber:      phoneNumber,
       transactionDate:  transactionDate,
       remainingBalance: remainingBalance,
+      fee:              fee,
     );
+  }
+
+  /// Parses a batch of text. 
+  /// If it detects a Maya batch (or is explicitly told to expect Maya), it splits by new lines.
+  /// Otherwise, it assumes a standard single GCash receipt block.
+  static List<ParsedReceipt> parseBatch(String rawText, {Platform? platformHint}) {
+    final platform = _detectPlatform(rawText, hint: platformHint);
+    
+    // Maya uses line-by-line batch format
+    if (platform == Platform.maya) {
+      final lines = rawText.split('\n').map((l) => l.trim()).where((l) => l.isNotEmpty).toList();
+      final List<ParsedReceipt> results = [];
+      for (final line in lines) {
+        // Only parse lines that look like valid transactions (containing dates or 'php' or 'paid'/'sold')
+        // We'll just run it through parse() and if it extracts anything useful (like an amount or ref), keep it.
+        final parsed = parse(line, platformHint: platformHint);
+        if (parsed.amount != null || parsed.referenceNumber != null || parsed.transactionDate != null) {
+          results.add(parsed);
+        }
+      }
+      if (results.isNotEmpty) return results;
+    }
+    
+    // Fallback: single receipt mode
+    return [parse(rawText, platformHint: platformHint)];
   }
 }

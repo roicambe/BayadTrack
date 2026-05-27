@@ -363,6 +363,10 @@ class _SkyPainter extends CustomPainter {
     );
 
     // ── Layer 4: Sun / Moon disc ──────────────────────────────────────────
+    if (!orbConfig.showSun) {
+      canvas.saveLayer(Rect.fromCircle(center: orbCenter, radius: orbR), Paint());
+    }
+
     canvas.drawCircle(
       orbCenter,
       orbR,
@@ -382,9 +386,10 @@ class _SkyPainter extends CustomPainter {
         orbCenter.translate(orbR * 0.40, 0),
         orbR * 0.85,
         Paint()
-          ..color = const Color(0x66000020)
-          ..style = PaintingStyle.fill,
+          ..blendMode = BlendMode.dstOut
+          ..color = Colors.black,
       );
+      canvas.restore();
     }
   }
 

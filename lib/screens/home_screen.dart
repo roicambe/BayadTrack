@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:fl_chart/fl_chart.dart';
@@ -262,19 +263,26 @@ class _HomeScreenState extends State<HomeScreen> {
                     Expanded(child: const _SectionLabel('Business Trends')),
                     const SizedBox(width: 8),
                     // Segmented Button Toggle Selector
-                    Container(
-                      padding: const EdgeInsets.all(3),
-                      decoration: BoxDecoration(
-                        color: isDark ? Colors.white.withValues(alpha: 0.12) : Colors.black.withValues(alpha: 0.06),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          _buildPeriodToggle(ChartPeriod.week, 'Week', theme),
-                          _buildPeriodToggle(ChartPeriod.month, 'Month', theme),
-                          _buildPeriodToggle(ChartPeriod.year, 'Year', theme),
-                        ],
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(10),
+                      child: BackdropFilter(
+                        filter: ImageFilter.blur(sigmaX: 0, sigmaY: 0),
+                        child: Container(
+                          padding: const EdgeInsets.all(3),
+                          decoration: BoxDecoration(
+                            color: isDark ? Colors.black.withValues(alpha: 0.35) : Colors.white.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: isDark ? Colors.white.withValues(alpha: 0.08) : Colors.white.withValues(alpha: 0.2), width: 1.0),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              _buildPeriodToggle(ChartPeriod.week, 'Week', theme),
+                              _buildPeriodToggle(ChartPeriod.month, 'Month', theme),
+                              _buildPeriodToggle(ChartPeriod.year, 'Year', theme),
+                            ],
+                          ),
+                        ),
                       ),
                     ),
                   ],
@@ -296,18 +304,25 @@ class _HomeScreenState extends State<HomeScreen> {
                     Expanded(child: const _SectionLabel('Pure Earnings (Kita)')),
                     const SizedBox(width: 8),
                     // Platform Segmented Toggle
-                    Container(
-                      padding: const EdgeInsets.all(3),
-                      decoration: BoxDecoration(
-                        color: isDark ? Colors.white.withValues(alpha: 0.12) : Colors.black.withValues(alpha: 0.06),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          _buildPlatformToggle(Platform.gcash, 'GCash', theme),
-                          _buildPlatformToggle(Platform.maya, 'Maya', theme),
-                        ],
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(10),
+                      child: BackdropFilter(
+                        filter: ImageFilter.blur(sigmaX: 0, sigmaY: 0),
+                        child: Container(
+                          padding: const EdgeInsets.all(3),
+                          decoration: BoxDecoration(
+                            color: isDark ? Colors.black.withValues(alpha: 0.35) : Colors.white.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: isDark ? Colors.white.withValues(alpha: 0.08) : Colors.white.withValues(alpha: 0.2), width: 1.0),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              _buildPlatformToggle(Platform.gcash, 'GCash', theme),
+                              _buildPlatformToggle(Platform.maya, 'Maya', theme),
+                            ],
+                          ),
+                        ),
                       ),
                     ),
                   ],
@@ -330,19 +345,26 @@ class _HomeScreenState extends State<HomeScreen> {
                     Expanded(child: const _SectionLabel('Business Insights')),
                     const SizedBox(width: 8),
                     // Segmented Button Toggle Selector for Insights
-                    Container(
-                      padding: const EdgeInsets.all(3),
-                      decoration: BoxDecoration(
-                        color: isDark ? Colors.white.withValues(alpha: 0.12) : Colors.black.withValues(alpha: 0.06),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          _buildInsightsPeriodToggle(ChartPeriod.week, 'Week', theme),
-                          _buildInsightsPeriodToggle(ChartPeriod.month, 'Month', theme),
-                          _buildInsightsPeriodToggle(ChartPeriod.year, 'Year', theme),
-                        ],
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(10),
+                      child: BackdropFilter(
+                        filter: ImageFilter.blur(sigmaX: 0, sigmaY: 0),
+                        child: Container(
+                          padding: const EdgeInsets.all(3),
+                          decoration: BoxDecoration(
+                            color: isDark ? Colors.black.withValues(alpha: 0.35) : Colors.white.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: isDark ? Colors.white.withValues(alpha: 0.08) : Colors.white.withValues(alpha: 0.2), width: 1.0),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              _buildInsightsPeriodToggle(ChartPeriod.week, 'Week', theme),
+                              _buildInsightsPeriodToggle(ChartPeriod.month, 'Month', theme),
+                              _buildInsightsPeriodToggle(ChartPeriod.year, 'Year', theme),
+                            ],
+                          ),
+                        ),
                       ),
                     ),
                   ],
@@ -443,6 +465,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildPeriodToggle(ChartPeriod period, String text, ThemeData theme) {
     final isSelected = _selectedPeriod == period;
+    final isDark = theme.brightness == Brightness.dark;
     return GestureDetector(
       onTap: () {
         setState(() {
@@ -453,7 +476,7 @@ class _HomeScreenState extends State<HomeScreen> {
         duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(
-          color: isSelected ? theme.colorScheme.surface : Colors.transparent,
+          color: isSelected ? (isDark ? Colors.white.withValues(alpha: 0.15) : Colors.white.withValues(alpha: 0.25)) : Colors.transparent,
           borderRadius: BorderRadius.circular(8),
           boxShadow: isSelected
               ? [
@@ -468,7 +491,7 @@ class _HomeScreenState extends State<HomeScreen> {
         child: Text(
           text,
           style: theme.textTheme.labelMedium?.copyWith(
-            color: isSelected ? theme.colorScheme.onSurface : theme.colorScheme.onSurface.withValues(alpha: 0.6),
+            color: isSelected ? Colors.white : Colors.white.withValues(alpha: 0.6),
             fontWeight: FontWeight.w600,
           ),
         ),
@@ -478,6 +501,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildPlatformToggle(Platform platform, String text, ThemeData theme) {
     final isSelected = _selectedEarningsPlatform == platform;
+    final isDark = theme.brightness == Brightness.dark;
     return GestureDetector(
       onTap: () {
         setState(() {
@@ -488,7 +512,7 @@ class _HomeScreenState extends State<HomeScreen> {
         duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(
-          color: isSelected ? theme.colorScheme.surface : Colors.transparent,
+          color: isSelected ? (isDark ? Colors.white.withValues(alpha: 0.15) : Colors.white.withValues(alpha: 0.25)) : Colors.transparent,
           borderRadius: BorderRadius.circular(8),
           boxShadow: isSelected
               ? [
@@ -503,7 +527,7 @@ class _HomeScreenState extends State<HomeScreen> {
         child: Text(
           text,
           style: theme.textTheme.labelMedium?.copyWith(
-            color: isSelected ? theme.colorScheme.onSurface : theme.colorScheme.onSurface.withValues(alpha: 0.6),
+            color: isSelected ? Colors.white : Colors.white.withValues(alpha: 0.6),
             fontWeight: FontWeight.w600,
           ),
         ),
@@ -542,14 +566,14 @@ class _HomeScreenState extends State<HomeScreen> {
             children: [
               Icon(
                 icon,
-                color: isSelected ? activeColor : theme.colorScheme.onSurface.withValues(alpha: 0.45),
+                color: isSelected ? activeColor : Colors.white.withValues(alpha: 0.45),
                 size: 18,
               ),
               const SizedBox(height: 4),
               Text(
                 label,
                 style: theme.textTheme.labelMedium?.copyWith(
-                  color: isSelected ? activeColor : theme.colorScheme.onSurface.withValues(alpha: 0.6),
+                  color: isSelected ? activeColor : Colors.white.withValues(alpha: 0.6),
                   fontWeight: FontWeight.w600,
                 ),
                 textAlign: TextAlign.center,
@@ -573,7 +597,7 @@ class _HomeScreenState extends State<HomeScreen> {
           child: Text(
             'No records logged for this period',
             style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.onSurface.withValues(alpha: 0.45),
+              color: Colors.white.withValues(alpha: 0.45),
               fontWeight: FontWeight.w600,
             ),
           ),
@@ -587,7 +611,7 @@ class _HomeScreenState extends State<HomeScreen> {
         final rank = idx + 1;
 
         // Custom ranking color badges for top 3
-        Color rankColor = theme.colorScheme.onSurface.withValues(alpha: 0.35);
+        Color rankColor = Colors.white.withValues(alpha: 0.35);
         if (rank == 1) rankColor = Colors.amber.shade700;
         if (rank == 2) rankColor = Colors.grey.shade500;
         if (rank == 3) rankColor = Colors.brown.shade400;
@@ -620,7 +644,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   entry.key,
                   style: theme.textTheme.titleSmall?.copyWith(
                     fontWeight: FontWeight.w700,
-                    color: theme.colorScheme.onSurface,
+                    color: Colors.white,
                   ),
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -629,7 +653,7 @@ class _HomeScreenState extends State<HomeScreen> {
               Text(
                 valueFormatter(entry.value),
                 style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.onSurface.withValues(alpha: 0.65),
+                  color: Colors.white.withValues(alpha: 0.65),
                   fontWeight: FontWeight.w700,
                 ),
               ),
@@ -642,6 +666,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildInsightsPeriodToggle(ChartPeriod period, String text, ThemeData theme) {
     final isSelected = _insightsPeriod == period;
+    final isDark = theme.brightness == Brightness.dark;
     return GestureDetector(
       onTap: () {
         setState(() {
@@ -652,7 +677,7 @@ class _HomeScreenState extends State<HomeScreen> {
         duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(
-          color: isSelected ? theme.colorScheme.surface : Colors.transparent,
+          color: isSelected ? (isDark ? Colors.white.withValues(alpha: 0.15) : Colors.white.withValues(alpha: 0.25)) : Colors.transparent,
           borderRadius: BorderRadius.circular(8),
           boxShadow: isSelected
               ? [
@@ -667,7 +692,7 @@ class _HomeScreenState extends State<HomeScreen> {
         child: Text(
           text,
           style: theme.textTheme.labelMedium?.copyWith(
-            color: isSelected ? theme.colorScheme.onSurface : theme.colorScheme.onSurface.withValues(alpha: 0.6),
+            color: isSelected ? Colors.white : Colors.white.withValues(alpha: 0.6),
             fontWeight: FontWeight.w600,
           ),
         ),
@@ -728,30 +753,21 @@ class _BalanceCard extends StatelessWidget {
     final isLowBalance = balance < 1000.0;
     final warningColor = Colors.amber.shade700;
 
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 300),
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: isDark ? AppColors.darkCard : AppColors.lightCard,
-        borderRadius: BorderRadius.circular(24),
-        border: isLowBalance
-            ? Border.all(color: warningColor, width: 2.0)
-            : (isDark
-                ? Border.all(color: brandColor.withValues(alpha: 0.25), width: 1)
-                : Border.all(color: Colors.grey.shade200, width: 1.2)),
-        boxShadow: isDark
-            ? null
-            : [
-                BoxShadow(
-                  color: isLowBalance
-                      ? warningColor.withValues(alpha: 0.08)
-                      : Colors.black.withValues(alpha: 0.04),
-                  blurRadius: 16,
-                  offset: const Offset(0, 6),
-                ),
-              ],
-      ),
-      child: Column(
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(24),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 0, sigmaY: 0),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 300),
+          padding: const EdgeInsets.all(18),
+          decoration: BoxDecoration(
+            color: isDark ? Colors.black.withValues(alpha: 0.35) : Colors.white.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(24),
+            border: isLowBalance
+                ? Border.all(color: warningColor, width: 2.0)
+                : Border.all(color: isDark ? Colors.white.withValues(alpha: 0.08) : Colors.white.withValues(alpha: 0.2), width: 1.0),
+          ),
+          child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
@@ -793,7 +809,7 @@ class _BalanceCard extends StatelessWidget {
             '$platformName Balance',
             style: theme.textTheme.bodySmall?.copyWith(
               fontWeight: FontWeight.w700,
-              color: theme.colorScheme.onSurface.withValues(alpha: 0.50),
+              color: Colors.white.withValues(alpha: 0.50),
             ),
           ),
           const SizedBox(height: 4),
@@ -817,7 +833,7 @@ class _BalanceCard extends StatelessWidget {
                 ? 'As of ${DateFormat('MMM d, h:mm a').format(lastUpdated!)}'
                 : 'No transactions logged',
             style: theme.textTheme.labelSmall?.copyWith(
-              color: theme.colorScheme.onSurface.withValues(alpha: 0.40),
+              color: Colors.white.withValues(alpha: 0.40),
               fontWeight: FontWeight.w500,
             ),
             overflow: TextOverflow.ellipsis,
@@ -825,7 +841,7 @@ class _BalanceCard extends StatelessWidget {
           ),
         ],
       ),
-    );
+    )));
   }
 }
 
@@ -939,24 +955,19 @@ class _TrendChartCard extends StatelessWidget {
     if (maxVolume == 0) maxVolume = 1000.0; // fallback default
     maxVolume = (maxVolume * 1.15); // pad a bit at top
 
-    return Container(
-      height: 290,
-      padding: const EdgeInsets.fromLTRB(10, 24, 22, 14),
-      decoration: BoxDecoration(
-        color: isDark ? AppColors.darkCard : AppColors.lightCard,
-        borderRadius: BorderRadius.circular(24),
-        border: isDark ? Border.all(color: Colors.white.withValues(alpha: 0.08), width: 1) : null,
-        boxShadow: isDark
-            ? null
-            : [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.04),
-                  blurRadius: 16,
-                  offset: const Offset(0, 6),
-                ),
-              ],
-      ),
-      child: Column(
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(24),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 0, sigmaY: 0),
+        child: Container(
+          height: 290,
+          padding: const EdgeInsets.fromLTRB(10, 24, 22, 14),
+          decoration: BoxDecoration(
+            color: isDark ? Colors.black.withValues(alpha: 0.35) : Colors.white.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: isDark ? Colors.white.withValues(alpha: 0.08) : Colors.white.withValues(alpha: 0.2), width: 1.0),
+          ),
+          child: Column(
         children: [
           Expanded(
             child: LineChart(
@@ -965,7 +976,7 @@ class _TrendChartCard extends StatelessWidget {
                   show: true,
                   drawVerticalLine: false,
                   getDrawingHorizontalLine: (value) => FlLine(
-                    color: theme.colorScheme.onSurface.withValues(alpha: 0.08),
+                    color: Colors.white.withValues(alpha: 0.08),
                     strokeWidth: 1,
                   ),
                 ),
@@ -987,7 +998,7 @@ class _TrendChartCard extends StatelessWidget {
                               xLabels[idx],
                               textScaler: TextScaler.noScaling,
                               style: theme.textTheme.bodySmall?.copyWith(
-                                color: theme.colorScheme.onSurface.withValues(alpha: 0.45),
+                                color: Colors.white.withValues(alpha: 0.45),
                                 fontSize: period == ChartPeriod.month ? 9 : 10,
                                 fontWeight: FontWeight.w700,
                               ),
@@ -1008,7 +1019,7 @@ class _TrendChartCard extends StatelessWidget {
                             '₱0',
                             textScaler: TextScaler.noScaling,
                             style: TextStyle(
-                              color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
+                              color: Colors.white.withValues(alpha: 0.4),
                               fontSize: 9,
                               fontWeight: FontWeight.w600,
                             ),
@@ -1019,7 +1030,7 @@ class _TrendChartCard extends StatelessWidget {
                           formatted,
                           textScaler: TextScaler.noScaling,
                           style: TextStyle(
-                            color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
+                            color: Colors.white.withValues(alpha: 0.4),
                             fontSize: 9,
                             fontWeight: FontWeight.w600,
                           ),
@@ -1096,7 +1107,7 @@ class _TrendChartCard extends StatelessWidget {
           ),
         ],
       ),
-    );
+    )));
   }
 
   Widget _buildLegendDot(Color color, String text) {
@@ -1112,7 +1123,7 @@ class _TrendChartCard extends StatelessWidget {
           text,
           textScaler: TextScaler.noScaling,
           style: TextStyle(
-            color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+            color: Colors.white.withValues(alpha: 0.6),
             fontSize: 11,
             fontWeight: FontWeight.w800,
           ),
@@ -1142,23 +1153,18 @@ class _InsightItemCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: isDark ? AppColors.darkCard : AppColors.lightCard,
-        borderRadius: BorderRadius.circular(22),
-        border: isDark ? Border.all(color: Colors.white.withValues(alpha: 0.08), width: 1) : null,
-        boxShadow: isDark
-            ? null
-            : [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.04),
-                  blurRadius: 16,
-                  offset: const Offset(0, 6),
-                ),
-              ],
-      ),
-      child: Column(
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(22),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 0, sigmaY: 0),
+        child: Container(
+          padding: const EdgeInsets.all(18),
+          decoration: BoxDecoration(
+            color: isDark ? Colors.black.withValues(alpha: 0.35) : Colors.white.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(22),
+            border: Border.all(color: isDark ? Colors.white.withValues(alpha: 0.08) : Colors.white.withValues(alpha: 0.2), width: 1.0),
+          ),
+          child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
@@ -1177,7 +1183,7 @@ class _InsightItemCard extends StatelessWidget {
                   title,
                   style: theme.textTheme.bodySmall?.copyWith(
                     fontWeight: FontWeight.w800,
-                    color: theme.colorScheme.onSurface.withValues(alpha: 0.50),
+                    color: Colors.white.withValues(alpha: 0.50),
                     fontSize: 10,
                   ),
                   overflow: TextOverflow.ellipsis,
@@ -1189,7 +1195,7 @@ class _InsightItemCard extends StatelessWidget {
           child,
         ],
       ),
-    );
+    )));
   }
 }
 
@@ -1301,24 +1307,19 @@ class _EarningsBarChartCard extends StatelessWidget {
       decimalDigits: 2,
     );
 
-    return Container(
-      height: 290,
-      padding: const EdgeInsets.fromLTRB(10, 20, 20, 14),
-      decoration: BoxDecoration(
-        color: isDark ? AppColors.darkCard : AppColors.lightCard,
-        borderRadius: BorderRadius.circular(24),
-        border: isDark ? Border.all(color: Colors.white.withValues(alpha: 0.08), width: 1) : null,
-        boxShadow: isDark
-            ? null
-            : [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.04),
-                  blurRadius: 16,
-                  offset: const Offset(0, 6),
-                ),
-              ],
-      ),
-      child: Column(
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(24),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 0, sigmaY: 0),
+        child: Container(
+          height: 290,
+          padding: const EdgeInsets.fromLTRB(10, 20, 20, 14),
+          decoration: BoxDecoration(
+            color: isDark ? Colors.black.withValues(alpha: 0.35) : Colors.white.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: isDark ? Colors.white.withValues(alpha: 0.08) : Colors.white.withValues(alpha: 0.2), width: 1.0),
+          ),
+          child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Padding(
@@ -1331,7 +1332,7 @@ class _EarningsBarChartCard extends StatelessWidget {
                     'Total ${platform == Platform.gcash ? "GCash" : "Maya"} Kita',
                     style: theme.textTheme.bodySmall?.copyWith(
                       fontWeight: FontWeight.w700,
-                      color: theme.colorScheme.onSurface.withValues(alpha: 0.50),
+                      color: Colors.white.withValues(alpha: 0.50),
                     ),
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -1374,7 +1375,7 @@ class _EarningsBarChartCard extends StatelessWidget {
                               xLabels[idx],
                               textScaler: TextScaler.noScaling,
                               style: theme.textTheme.bodySmall?.copyWith(
-                                color: theme.colorScheme.onSurface.withValues(alpha: 0.45),
+                                color: Colors.white.withValues(alpha: 0.45),
                                 fontSize: period == ChartPeriod.month ? 9 : 10,
                                 fontWeight: FontWeight.w700,
                               ),
@@ -1395,7 +1396,7 @@ class _EarningsBarChartCard extends StatelessWidget {
                             '₱0',
                             textScaler: TextScaler.noScaling,
                             style: TextStyle(
-                              color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
+                              color: Colors.white.withValues(alpha: 0.4),
                               fontSize: 9,
                               fontWeight: FontWeight.w600,
                             ),
@@ -1405,7 +1406,7 @@ class _EarningsBarChartCard extends StatelessWidget {
                           '₱${value.toStringAsFixed(0)}',
                           textScaler: TextScaler.noScaling,
                           style: TextStyle(
-                            color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
+                            color: Colors.white.withValues(alpha: 0.4),
                             fontSize: 9,
                             fontWeight: FontWeight.w600,
                           ),
@@ -1438,7 +1439,7 @@ class _EarningsBarChartCard extends StatelessWidget {
           ),
         ],
       ),
-    );
+    )));
   }
 }
 
