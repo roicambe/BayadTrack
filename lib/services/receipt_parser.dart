@@ -35,6 +35,12 @@ class ParsedReceipt {
   /// Service fee if applicable (null if not found)
   final double? fee;
 
+  /// The service provider for Maya load/bills transactions (null if not found)
+  final String? serviceProvider;
+
+  /// Account number for Maya Business or bank transfer
+  final String? accountNumber;
+
   const ParsedReceipt({
     required this.rawText,
     required this.platform,
@@ -46,6 +52,8 @@ class ParsedReceipt {
     this.transactionDate,
     this.remainingBalance,
     this.fee,
+    this.serviceProvider,
+    this.accountNumber,
   });
 
   /// True if the minimum required fields (amount + reference) were found.
@@ -91,8 +99,7 @@ class ReceiptParser {
     
     // Explicitly check for sent patterns
     if (lower.contains('you have sent') ||
-        lower.contains('successfully sent') ||
-        lower.contains('sold ')) { // Maya load purchase
+        lower.contains('successfully sent')) {
       return TransactionType.sent;
     }
 
@@ -103,6 +110,17 @@ class ReceiptParser {
     if (lower.contains('cash out') ||
         lower.contains('cashout')) {
       return TransactionType.cashOut;
+    }
+    
+    // Maya specific payment patterns
+    if (lower.contains('paid php') || 
+        lower.contains('sold ')) {
+      return TransactionType.payment;
+    }
+
+    // Default heuristics
+    if (lower.contains('pay') || lower.contains('bought')) {
+      return TransactionType.payment;
     }
     if (lower.contains('payment') ||
         lower.contains('paid to') ||
@@ -117,6 +135,17 @@ class ReceiptParser {
 
   // ── Amount extraction ────────────────────────────────────────────────────
   static double? _extractAmount(String text) {
+    // Maya Load Format: Sold ALLNET w/ FREE Landline 599 to +63...
+    // Extract the amount directly from the promo name and round up if it ends in 9
+    final loadMatch = RegExp(r'Sold\s+[\s\S]+?\s+(\d+)\s+to\s+(?:(?:\+?63|0)9)', caseSensitive: false).firstMatch(text);
+    if (loadMatch != null) {
+      double rawAmount = double.parse(loadMatch.group(1)!);
+      if (rawAmount % 10 == 9) {
+        rawAmount += 1;
+      }
+      return rawAmount;
+    }
+
     final lines = text.split('\n').map((l) => l.trim()).toList();
     for (int i = 0; i < lines.length; i++) {
       final line = lines[i];
@@ -166,23 +195,24 @@ class ReceiptParser {
     return double.tryParse(cleaned);
   }
 
-  // ── Reference number extraction ─────────────────────────────────────────
+  // ── Reference Number extraction ──────────────────────────────────────────
   static final _refRe = RegExp(
-    r'(?:ref(?:erence)?\.?\s*(?:no\.?|num(?:ber)?\.?|#)?[\s:]*)'
-    r'([0-9][0-9 ]{8,20}[0-9])',
+    r'(?:ref(?:\.|erence)?\s*(?:no\.?|number)?|ref\s*id|transaction\s*(?:no\.?|number)?)\s*[:\-\n]?\s*([0-9a-fA-F][0-9a-fA-F\soOlLiI]{8,25}[0-9a-fA-FoOlLiI])',
     caseSensitive: false,
   );
-
-  static final _refFallbackRe = RegExp(r'\b([0-9]{4}\s[0-9]{3}\s[0-9]{6})\b');
+  static final _refFallbackRe = RegExp(r'(?:^|\W)([0-9a-fA-F]{12,16})(?:\W|$)');
 
   static String? _extractReference(String text) {
     final match = _refRe.firstMatch(text);
     if (match != null) {
-      return match.group(1)!.replaceAll(' ', '');
+      return match.group(1)!
+          .replaceAll(RegExp(r'[\s]'), '')
+          .replaceAll(RegExp(r'[oO]', caseSensitive: false), '0')
+          .replaceAll(RegExp(r'[lL|iI]', caseSensitive: false), '1');
     }
     final fallback = _refFallbackRe.firstMatch(text);
     if (fallback != null) {
-      return fallback.group(1)!.replaceAll(' ', '');
+      return fallback.group(1)!;
     }
     return null;
   }
@@ -219,14 +249,28 @@ class ReceiptParser {
   );
 
   static final _toFromRe = RegExp(
-    r'(?:to|from|send to|sent to|recipient)[:\s]+([A-Za-z][A-Za-z *\.•●·\-]{3,40})',
+    r'(?:to|from|send to|sent to|recipient)[:\s]+((?!your\s+)(?!my\s+)[A-Za-z][A-Za-z *\.•●·\-]{3,40})',
     caseSensitive: false,
   );
 
-  static String? _extractName(String text, String? foundPhone) {
+  static String? _extractName(String text, String? foundPhone, String? serviceProvider) {
     String? rawName;
     final lines = text.split('\n').map((l) => l.trim()).toList();
     
+    // Check if a potential name is just a UI label
+    bool isForbiddenName(String name) {
+      final n = name.toLowerCase().replaceAll(RegExp(r'[^a-z]'), '');
+      return n.isEmpty ||
+             n == 'amount' ||
+             n == 'date' ||
+             n == 'time' ||
+             n.contains('transactiondetail') ||
+             n.contains('transferfrom') ||
+             n.contains('mayabusiness') ||
+             n == 'gcash' ||
+             n == 'referencenumber';
+    }
+
     // 1. Line directly above phone number (extremely reliable for Express Send screen)
     if (foundPhone != null) {
       final cleanFound = foundPhone.replaceAll(RegExp(r'[^\d*•●]'), '');
@@ -282,6 +326,15 @@ class ReceiptParser {
       if (masked != null) rawName = masked.group(1)!.trim();
     }
 
+    if (rawName != null) {
+      if (isForbiddenName(rawName)) {
+        rawName = null;
+      } else if (serviceProvider != null && rawName.toLowerCase().startsWith(serviceProvider.toLowerCase())) {
+        // Prevent service provider from being duplicated into the person name field
+        rawName = null;
+      }
+    }
+
     return rawName != null ? _cleanMaskedName(rawName) : null;
   }
 
@@ -330,6 +383,27 @@ class ReceiptParser {
     if (match != null) {
       return _parseAmount(match.group(1)!);
     }
+    return null;
+  }
+
+  // ── Service Provider extraction ───────────────────────────────────────────
+  static String? _extractServiceProvider(String text) {
+    // Pay bills format: Paid ... to [Provider]. Your...
+    // Use (?s) or \s+ to handle newlines between 'to' and the provider name
+    final paidMatch = RegExp(r'Paid[\s\S]*? to (.+?)\.\s*Your', caseSensitive: false).firstMatch(text);
+    if (paidMatch != null) {
+      final match = paidMatch.group(1)?.replaceAll('\n', ' ')?.trim();
+      if (match != null && !RegExp(r'^\+?\d+$').hasMatch(match.replaceAll(RegExp(r'[ \-]'), ''))) {
+        return match;
+      }
+    }
+    
+    // Load format: Sold [Provider/Promo] to +63...
+    final soldMatch = RegExp(r'Sold ([\s\S]+?) to \s*(?:(?:\+?63|0)9)', caseSensitive: false).firstMatch(text);
+    if (soldMatch != null) {
+      return soldMatch.group(1)?.replaceAll('\n', ' ')?.trim();
+    }
+    
     return null;
   }
 
@@ -428,7 +502,8 @@ class ReceiptParser {
     final amount          = _extractAmount(rawText);
     final referenceNumber = _extractReference(rawText);
     final phoneNumber     = _extractPhone(rawText);
-    final personName      = _extractName(rawText, phoneNumber);
+    final serviceProvider = _extractServiceProvider(rawText);
+    final personName      = _extractName(rawText, phoneNumber, serviceProvider);
     final transactionDate = _extractDate(rawText);
     final remainingBalance = _extractBalance(rawText);
     final fee             = _extractFee(rawText);
@@ -444,6 +519,8 @@ class ReceiptParser {
       transactionDate:  transactionDate,
       remainingBalance: remainingBalance,
       fee:              fee,
+      serviceProvider:  serviceProvider,
+      accountNumber:    null, // Not parsed yet
     );
   }
 

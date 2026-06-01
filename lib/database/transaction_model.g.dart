@@ -17,64 +17,74 @@ const TransactionRecordSchema = CollectionSchema(
   name: r'TransactionRecord',
   id: 5251947889243599499,
   properties: {
-    r'amount': PropertySchema(
+    r'accountNumber': PropertySchema(
       id: 0,
+      name: r'accountNumber',
+      type: IsarType.string,
+    ),
+    r'amount': PropertySchema(
+      id: 1,
       name: r'amount',
       type: IsarType.double,
     ),
     r'fee': PropertySchema(
-      id: 1,
+      id: 2,
       name: r'fee',
       type: IsarType.double,
     ),
     r'isSettled': PropertySchema(
-      id: 2,
+      id: 3,
       name: r'isSettled',
       type: IsarType.bool,
     ),
     r'notes': PropertySchema(
-      id: 3,
+      id: 4,
       name: r'notes',
       type: IsarType.string,
     ),
     r'platform': PropertySchema(
-      id: 4,
+      id: 5,
       name: r'platform',
       type: IsarType.string,
       enumMap: _TransactionRecordplatformEnumValueMap,
     ),
     r'recordedAt': PropertySchema(
-      id: 5,
+      id: 6,
       name: r'recordedAt',
       type: IsarType.dateTime,
     ),
     r'referenceNumber': PropertySchema(
-      id: 6,
+      id: 7,
       name: r'referenceNumber',
       type: IsarType.string,
     ),
     r'remainingBalance': PropertySchema(
-      id: 7,
+      id: 8,
       name: r'remainingBalance',
       type: IsarType.double,
     ),
     r'senderName': PropertySchema(
-      id: 8,
+      id: 9,
       name: r'senderName',
       type: IsarType.string,
     ),
     r'senderNumber': PropertySchema(
-      id: 9,
+      id: 10,
       name: r'senderNumber',
       type: IsarType.string,
     ),
+    r'serviceProvider': PropertySchema(
+      id: 11,
+      name: r'serviceProvider',
+      type: IsarType.string,
+    ),
     r'timestamp': PropertySchema(
-      id: 10,
+      id: 12,
       name: r'timestamp',
       type: IsarType.dateTime,
     ),
     r'transactionType': PropertySchema(
-      id: 11,
+      id: 13,
       name: r'transactionType',
       type: IsarType.string,
       enumMap: _TransactionRecordtransactionTypeEnumValueMap,
@@ -115,6 +125,12 @@ int _transactionRecordEstimateSize(
 ) {
   var bytesCount = offsets.last;
   {
+    final value = object.accountNumber;
+    if (value != null) {
+      bytesCount += 3 + value.length * 3;
+    }
+  }
+  {
     final value = object.notes;
     if (value != null) {
       bytesCount += 3 + value.length * 3;
@@ -134,6 +150,12 @@ int _transactionRecordEstimateSize(
       bytesCount += 3 + value.length * 3;
     }
   }
+  {
+    final value = object.serviceProvider;
+    if (value != null) {
+      bytesCount += 3 + value.length * 3;
+    }
+  }
   bytesCount += 3 + object.transactionType.name.length * 3;
   return bytesCount;
 }
@@ -144,18 +166,20 @@ void _transactionRecordSerialize(
   List<int> offsets,
   Map<Type, List<int>> allOffsets,
 ) {
-  writer.writeDouble(offsets[0], object.amount);
-  writer.writeDouble(offsets[1], object.fee);
-  writer.writeBool(offsets[2], object.isSettled);
-  writer.writeString(offsets[3], object.notes);
-  writer.writeString(offsets[4], object.platform.name);
-  writer.writeDateTime(offsets[5], object.recordedAt);
-  writer.writeString(offsets[6], object.referenceNumber);
-  writer.writeDouble(offsets[7], object.remainingBalance);
-  writer.writeString(offsets[8], object.senderName);
-  writer.writeString(offsets[9], object.senderNumber);
-  writer.writeDateTime(offsets[10], object.timestamp);
-  writer.writeString(offsets[11], object.transactionType.name);
+  writer.writeString(offsets[0], object.accountNumber);
+  writer.writeDouble(offsets[1], object.amount);
+  writer.writeDouble(offsets[2], object.fee);
+  writer.writeBool(offsets[3], object.isSettled);
+  writer.writeString(offsets[4], object.notes);
+  writer.writeString(offsets[5], object.platform.name);
+  writer.writeDateTime(offsets[6], object.recordedAt);
+  writer.writeString(offsets[7], object.referenceNumber);
+  writer.writeDouble(offsets[8], object.remainingBalance);
+  writer.writeString(offsets[9], object.senderName);
+  writer.writeString(offsets[10], object.senderNumber);
+  writer.writeString(offsets[11], object.serviceProvider);
+  writer.writeDateTime(offsets[12], object.timestamp);
+  writer.writeString(offsets[13], object.transactionType.name);
 }
 
 TransactionRecord _transactionRecordDeserialize(
@@ -165,22 +189,24 @@ TransactionRecord _transactionRecordDeserialize(
   Map<Type, List<int>> allOffsets,
 ) {
   final object = TransactionRecord();
-  object.amount = reader.readDouble(offsets[0]);
-  object.fee = reader.readDoubleOrNull(offsets[1]);
+  object.accountNumber = reader.readStringOrNull(offsets[0]);
+  object.amount = reader.readDouble(offsets[1]);
+  object.fee = reader.readDoubleOrNull(offsets[2]);
   object.id = id;
-  object.isSettled = reader.readBool(offsets[2]);
-  object.notes = reader.readStringOrNull(offsets[3]);
+  object.isSettled = reader.readBool(offsets[3]);
+  object.notes = reader.readStringOrNull(offsets[4]);
   object.platform = _TransactionRecordplatformValueEnumMap[
-          reader.readStringOrNull(offsets[4])] ??
+          reader.readStringOrNull(offsets[5])] ??
       Platform.gcash;
-  object.recordedAt = reader.readDateTimeOrNull(offsets[5]);
-  object.referenceNumber = reader.readString(offsets[6]);
-  object.remainingBalance = reader.readDoubleOrNull(offsets[7]);
-  object.senderName = reader.readStringOrNull(offsets[8]);
-  object.senderNumber = reader.readStringOrNull(offsets[9]);
-  object.timestamp = reader.readDateTime(offsets[10]);
+  object.recordedAt = reader.readDateTimeOrNull(offsets[6]);
+  object.referenceNumber = reader.readString(offsets[7]);
+  object.remainingBalance = reader.readDoubleOrNull(offsets[8]);
+  object.senderName = reader.readStringOrNull(offsets[9]);
+  object.senderNumber = reader.readStringOrNull(offsets[10]);
+  object.serviceProvider = reader.readStringOrNull(offsets[11]);
+  object.timestamp = reader.readDateTime(offsets[12]);
   object.transactionType = _TransactionRecordtransactionTypeValueEnumMap[
-          reader.readStringOrNull(offsets[11])] ??
+          reader.readStringOrNull(offsets[13])] ??
       TransactionType.sent;
   return object;
 }
@@ -193,30 +219,34 @@ P _transactionRecordDeserializeProp<P>(
 ) {
   switch (propertyId) {
     case 0:
-      return (reader.readDouble(offset)) as P;
-    case 1:
-      return (reader.readDoubleOrNull(offset)) as P;
-    case 2:
-      return (reader.readBool(offset)) as P;
-    case 3:
       return (reader.readStringOrNull(offset)) as P;
+    case 1:
+      return (reader.readDouble(offset)) as P;
+    case 2:
+      return (reader.readDoubleOrNull(offset)) as P;
+    case 3:
+      return (reader.readBool(offset)) as P;
     case 4:
+      return (reader.readStringOrNull(offset)) as P;
+    case 5:
       return (_TransactionRecordplatformValueEnumMap[
               reader.readStringOrNull(offset)] ??
           Platform.gcash) as P;
-    case 5:
-      return (reader.readDateTimeOrNull(offset)) as P;
     case 6:
-      return (reader.readString(offset)) as P;
+      return (reader.readDateTimeOrNull(offset)) as P;
     case 7:
-      return (reader.readDoubleOrNull(offset)) as P;
+      return (reader.readString(offset)) as P;
     case 8:
-      return (reader.readStringOrNull(offset)) as P;
+      return (reader.readDoubleOrNull(offset)) as P;
     case 9:
       return (reader.readStringOrNull(offset)) as P;
     case 10:
-      return (reader.readDateTime(offset)) as P;
+      return (reader.readStringOrNull(offset)) as P;
     case 11:
+      return (reader.readStringOrNull(offset)) as P;
+    case 12:
+      return (reader.readDateTime(offset)) as P;
+    case 13:
       return (_TransactionRecordtransactionTypeValueEnumMap[
               reader.readStringOrNull(offset)] ??
           TransactionType.sent) as P;
@@ -417,6 +447,160 @@ extension TransactionRecordQueryWhere
 
 extension TransactionRecordQueryFilter
     on QueryBuilder<TransactionRecord, TransactionRecord, QFilterCondition> {
+  QueryBuilder<TransactionRecord, TransactionRecord, QAfterFilterCondition>
+      accountNumberIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNull(
+        property: r'accountNumber',
+      ));
+    });
+  }
+
+  QueryBuilder<TransactionRecord, TransactionRecord, QAfterFilterCondition>
+      accountNumberIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNotNull(
+        property: r'accountNumber',
+      ));
+    });
+  }
+
+  QueryBuilder<TransactionRecord, TransactionRecord, QAfterFilterCondition>
+      accountNumberEqualTo(
+    String? value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'accountNumber',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<TransactionRecord, TransactionRecord, QAfterFilterCondition>
+      accountNumberGreaterThan(
+    String? value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'accountNumber',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<TransactionRecord, TransactionRecord, QAfterFilterCondition>
+      accountNumberLessThan(
+    String? value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'accountNumber',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<TransactionRecord, TransactionRecord, QAfterFilterCondition>
+      accountNumberBetween(
+    String? lower,
+    String? upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'accountNumber',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<TransactionRecord, TransactionRecord, QAfterFilterCondition>
+      accountNumberStartsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.startsWith(
+        property: r'accountNumber',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<TransactionRecord, TransactionRecord, QAfterFilterCondition>
+      accountNumberEndsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.endsWith(
+        property: r'accountNumber',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<TransactionRecord, TransactionRecord, QAfterFilterCondition>
+      accountNumberContains(String value, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.contains(
+        property: r'accountNumber',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<TransactionRecord, TransactionRecord, QAfterFilterCondition>
+      accountNumberMatches(String pattern, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.matches(
+        property: r'accountNumber',
+        wildcard: pattern,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<TransactionRecord, TransactionRecord, QAfterFilterCondition>
+      accountNumberIsEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'accountNumber',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<TransactionRecord, TransactionRecord, QAfterFilterCondition>
+      accountNumberIsNotEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        property: r'accountNumber',
+        value: '',
+      ));
+    });
+  }
+
   QueryBuilder<TransactionRecord, TransactionRecord, QAfterFilterCondition>
       amountEqualTo(
     double value, {
@@ -1526,6 +1710,160 @@ extension TransactionRecordQueryFilter
   }
 
   QueryBuilder<TransactionRecord, TransactionRecord, QAfterFilterCondition>
+      serviceProviderIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNull(
+        property: r'serviceProvider',
+      ));
+    });
+  }
+
+  QueryBuilder<TransactionRecord, TransactionRecord, QAfterFilterCondition>
+      serviceProviderIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNotNull(
+        property: r'serviceProvider',
+      ));
+    });
+  }
+
+  QueryBuilder<TransactionRecord, TransactionRecord, QAfterFilterCondition>
+      serviceProviderEqualTo(
+    String? value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'serviceProvider',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<TransactionRecord, TransactionRecord, QAfterFilterCondition>
+      serviceProviderGreaterThan(
+    String? value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'serviceProvider',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<TransactionRecord, TransactionRecord, QAfterFilterCondition>
+      serviceProviderLessThan(
+    String? value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'serviceProvider',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<TransactionRecord, TransactionRecord, QAfterFilterCondition>
+      serviceProviderBetween(
+    String? lower,
+    String? upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'serviceProvider',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<TransactionRecord, TransactionRecord, QAfterFilterCondition>
+      serviceProviderStartsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.startsWith(
+        property: r'serviceProvider',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<TransactionRecord, TransactionRecord, QAfterFilterCondition>
+      serviceProviderEndsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.endsWith(
+        property: r'serviceProvider',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<TransactionRecord, TransactionRecord, QAfterFilterCondition>
+      serviceProviderContains(String value, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.contains(
+        property: r'serviceProvider',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<TransactionRecord, TransactionRecord, QAfterFilterCondition>
+      serviceProviderMatches(String pattern, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.matches(
+        property: r'serviceProvider',
+        wildcard: pattern,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<TransactionRecord, TransactionRecord, QAfterFilterCondition>
+      serviceProviderIsEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'serviceProvider',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<TransactionRecord, TransactionRecord, QAfterFilterCondition>
+      serviceProviderIsNotEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        property: r'serviceProvider',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<TransactionRecord, TransactionRecord, QAfterFilterCondition>
       timestampEqualTo(DateTime value) {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.equalTo(
@@ -1727,6 +2065,20 @@ extension TransactionRecordQueryLinks
 extension TransactionRecordQuerySortBy
     on QueryBuilder<TransactionRecord, TransactionRecord, QSortBy> {
   QueryBuilder<TransactionRecord, TransactionRecord, QAfterSortBy>
+      sortByAccountNumber() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'accountNumber', Sort.asc);
+    });
+  }
+
+  QueryBuilder<TransactionRecord, TransactionRecord, QAfterSortBy>
+      sortByAccountNumberDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'accountNumber', Sort.desc);
+    });
+  }
+
+  QueryBuilder<TransactionRecord, TransactionRecord, QAfterSortBy>
       sortByAmount() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'amount', Sort.asc);
@@ -1866,6 +2218,20 @@ extension TransactionRecordQuerySortBy
   }
 
   QueryBuilder<TransactionRecord, TransactionRecord, QAfterSortBy>
+      sortByServiceProvider() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'serviceProvider', Sort.asc);
+    });
+  }
+
+  QueryBuilder<TransactionRecord, TransactionRecord, QAfterSortBy>
+      sortByServiceProviderDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'serviceProvider', Sort.desc);
+    });
+  }
+
+  QueryBuilder<TransactionRecord, TransactionRecord, QAfterSortBy>
       sortByTimestamp() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'timestamp', Sort.asc);
@@ -1896,6 +2262,20 @@ extension TransactionRecordQuerySortBy
 
 extension TransactionRecordQuerySortThenBy
     on QueryBuilder<TransactionRecord, TransactionRecord, QSortThenBy> {
+  QueryBuilder<TransactionRecord, TransactionRecord, QAfterSortBy>
+      thenByAccountNumber() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'accountNumber', Sort.asc);
+    });
+  }
+
+  QueryBuilder<TransactionRecord, TransactionRecord, QAfterSortBy>
+      thenByAccountNumberDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'accountNumber', Sort.desc);
+    });
+  }
+
   QueryBuilder<TransactionRecord, TransactionRecord, QAfterSortBy>
       thenByAmount() {
     return QueryBuilder.apply(this, (query) {
@@ -2049,6 +2429,20 @@ extension TransactionRecordQuerySortThenBy
   }
 
   QueryBuilder<TransactionRecord, TransactionRecord, QAfterSortBy>
+      thenByServiceProvider() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'serviceProvider', Sort.asc);
+    });
+  }
+
+  QueryBuilder<TransactionRecord, TransactionRecord, QAfterSortBy>
+      thenByServiceProviderDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'serviceProvider', Sort.desc);
+    });
+  }
+
+  QueryBuilder<TransactionRecord, TransactionRecord, QAfterSortBy>
       thenByTimestamp() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'timestamp', Sort.asc);
@@ -2079,6 +2473,14 @@ extension TransactionRecordQuerySortThenBy
 
 extension TransactionRecordQueryWhereDistinct
     on QueryBuilder<TransactionRecord, TransactionRecord, QDistinct> {
+  QueryBuilder<TransactionRecord, TransactionRecord, QDistinct>
+      distinctByAccountNumber({bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'accountNumber',
+          caseSensitive: caseSensitive);
+    });
+  }
+
   QueryBuilder<TransactionRecord, TransactionRecord, QDistinct>
       distinctByAmount() {
     return QueryBuilder.apply(this, (query) {
@@ -2151,6 +2553,14 @@ extension TransactionRecordQueryWhereDistinct
   }
 
   QueryBuilder<TransactionRecord, TransactionRecord, QDistinct>
+      distinctByServiceProvider({bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'serviceProvider',
+          caseSensitive: caseSensitive);
+    });
+  }
+
+  QueryBuilder<TransactionRecord, TransactionRecord, QDistinct>
       distinctByTimestamp() {
     return QueryBuilder.apply(this, (query) {
       return query.addDistinctBy(r'timestamp');
@@ -2171,6 +2581,13 @@ extension TransactionRecordQueryProperty
   QueryBuilder<TransactionRecord, int, QQueryOperations> idProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'id');
+    });
+  }
+
+  QueryBuilder<TransactionRecord, String?, QQueryOperations>
+      accountNumberProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'accountNumber');
     });
   }
 
@@ -2237,6 +2654,13 @@ extension TransactionRecordQueryProperty
       senderNumberProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'senderNumber');
+    });
+  }
+
+  QueryBuilder<TransactionRecord, String?, QQueryOperations>
+      serviceProviderProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'serviceProvider');
     });
   }
 

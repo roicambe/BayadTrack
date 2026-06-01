@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:isar/isar.dart';
 import 'package:path_provider/path_provider.dart';
 import 'transaction_model.dart';
@@ -243,6 +244,13 @@ class IsarService {
   /// Convenience method: builds a [TransactionRecord] from a [ParsedReceipt]
   /// and saves it. Falls back to sensible defaults for any null fields.
   Future<void> saveFromParsedReceipt(ParsedReceipt receipt, {double? manualFee}) async {
+    double? calculatedFee;
+    if (receipt.platform == Platform.maya) {
+      calculatedFee = await calculateMayaFee(receipt);
+    } else {
+      calculatedFee = await calculateFeeForAmount(receipt.amount ?? 0.0);
+    }
+
     final record = TransactionRecord()
       ..platform         = receipt.platform
       ..transactionType  = receipt.transactionType
@@ -251,9 +259,54 @@ class IsarService {
       ..timestamp        = receipt.transactionDate ?? DateTime.now()
       ..senderName       = receipt.personName
       ..senderNumber     = receipt.phoneNumber
+      ..serviceProvider  = receipt.serviceProvider
       ..remainingBalance = receipt.remainingBalance
-      ..fee              = manualFee ?? await calculateFeeForAmount(receipt.amount ?? 0.0);
+      ..fee              = manualFee ?? calculatedFee ?? 0.0;
     await saveTransaction(record);
+  }
+
+  /// Calculates the service fee for Maya Business transactions based on user-defined settings
+  Future<double?> calculateMayaFee(ParsedReceipt receipt) async {
+    final prefs = await SharedPreferences.getInstance();
+    
+    // Load the Maya fees map. If it doesn't exist, create default.
+    final String? mayaFeesJson = prefs.getString('maya_service_fees');
+    Map<String, dynamic> feesMap = {};
+    if (mayaFeesJson != null) {
+      feesMap = jsonDecode(mayaFeesJson);
+    } else {
+      feesMap = {
+        'Manila Water': 15.0,
+        'Meralco': 15.0,
+        'PLDT Home': 15.0,
+        'Home Credit': 25.0,
+        'Converge': 25.0,
+        'TALA': 25.0,
+        'RFID': 25.0,
+        'Load': 5.0,
+      };
+      await prefs.setString('maya_service_fees', jsonEncode(feesMap));
+    }
+    
+    final lowerText = receipt.rawText.toLowerCase();
+    
+    // Check if it's a load transaction
+    if (lowerText.contains('sold ') && lowerText.contains(' to ')) {
+       return (feesMap['Load'] as num?)?.toDouble() ?? 5.0;
+    }
+    
+    // For bills payment
+    final sp = receipt.serviceProvider?.toLowerCase();
+    if (sp != null) {
+       for (final key in feesMap.keys) {
+         if (key == 'Load') continue;
+         if (sp.contains(key.toLowerCase()) || key.toLowerCase().contains(sp)) {
+           return (feesMap[key] as num?)?.toDouble();
+         }
+       }
+    }
+    
+    return 0.0; // Default to 0 if not found
   }
 
   // ─────────────────────────────────────────────

@@ -52,6 +52,9 @@ class TransactionRecord {
   @Index()
   String? senderNumber;
 
+  /// Optional: account number (e.g., Maya Business or bank transfer)
+  String? accountNumber;
+
   /// Optional: remaining balance of e-wallet
   double? remainingBalance;
 
@@ -60,6 +63,9 @@ class TransactionRecord {
 
   /// Optional: any extra notes you want to add
   String? notes;
+
+  /// Optional: Maya service provider (billers, merchants, promo names)
+  String? serviceProvider;
 
   /// Optional: the computed service fee for this transaction
   double? fee;

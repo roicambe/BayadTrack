@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../theme/theme_provider.dart';
 import '../theme/app_colors.dart';
 import 'fee_settings_screen.dart';
+import 'maya_fee_settings_screen.dart';
 
 /// Settings screen — three sections:
 ///   1. Appearance   — Light / Dark / System theme toggle with visual previews
@@ -57,7 +58,7 @@ class SettingsScreen extends StatelessWidget {
               icon: Icons.percent_rounded,
               children: [
                 _DataActionButton(
-                  icon: Icons.payments_outlined,
+                  icon: Icons.account_balance_wallet_outlined,
                   label: 'GCash Service Fees',
                   color: AppColors.gcash,
                   onTap: () {
@@ -65,6 +66,20 @@ class SettingsScreen extends StatelessWidget {
                       context,
                       MaterialPageRoute(
                         builder: (context) => const FeeSettingsScreen(),
+                      ),
+                    );
+                  },
+                ),
+                const SizedBox(height: 10),
+                _DataActionButton(
+                  icon: Icons.payments_outlined,
+                  label: 'Maya Business Service Fees',
+                  color: AppColors.maya,
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const MayaFeeSettingsScreen(),
                       ),
                     );
                   },

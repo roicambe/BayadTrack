@@ -8,7 +8,7 @@ import '../database/transaction_model.dart';
 import '../database/isar_service.dart';
 import '../widgets/sky_background.dart';
 
-enum ChartPeriod { week, month, year }
+enum ChartPeriod { week, month, year, allTime }
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -23,8 +23,7 @@ class _HomeScreenState extends State<HomeScreen> {
   ChartPeriod _insightsPeriod = ChartPeriod.week;
   Platform _selectedEarningsPlatform = Platform.gcash;
   int _activeInsightTab = 0;
-
-
+  int _summaryTableSelectedYear = DateTime.now().year;
 
   @override
   Widget build(BuildContext context) {
@@ -96,13 +95,17 @@ class _HomeScreenState extends State<HomeScreen> {
           DateTime insightsPeriodStart;
           switch (_insightsPeriod) {
             case ChartPeriod.week:
-              insightsPeriodStart = DateTime(now.year, now.month, now.day).subtract(const Duration(days: 6));
+              final daysToSubtract = now.weekday == 7 ? 0 : now.weekday;
+              insightsPeriodStart = DateTime(now.year, now.month, now.day).subtract(Duration(days: daysToSubtract));
               break;
             case ChartPeriod.month:
-              insightsPeriodStart = DateTime(now.year, now.month, now.day).subtract(const Duration(days: 29));
+              insightsPeriodStart = DateTime(now.year, now.month, 1);
               break;
             case ChartPeriod.year:
-              insightsPeriodStart = DateTime(now.year, now.month, 1).subtract(const Duration(days: 365));
+              insightsPeriodStart = DateTime(now.year, 1, 1);
+              break;
+            case ChartPeriod.allTime:
+              insightsPeriodStart = DateTime(2000, 1, 1);
               break;
           }
 
@@ -280,6 +283,7 @@ class _HomeScreenState extends State<HomeScreen> {
                               _buildPeriodToggle(ChartPeriod.week, 'Week', theme),
                               _buildPeriodToggle(ChartPeriod.month, 'Month', theme),
                               _buildPeriodToggle(ChartPeriod.year, 'Year', theme),
+                              _buildPeriodToggle(ChartPeriod.allTime, 'All Time', theme),
                             ],
                           ),
                         ),
@@ -338,6 +342,78 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
                 const SizedBox(height: 28),
 
+                // ── 3.5 Earnings Summary Table ─────────────────────────────────
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(child: const _SectionLabel('Earnings Summary')),
+                    const SizedBox(width: 8),
+                    // Year Picker Button
+                    GestureDetector(
+                      onTap: () {
+                        showDialog(
+                          context: context,
+                          builder: (context) {
+                            return AlertDialog(
+                              backgroundColor: theme.colorScheme.surface,
+                              title: const Text('Select Year'),
+                              content: SizedBox(
+                                width: 200,
+                                height: 300,
+                                child: ListView.builder(
+                                  itemCount: 10,
+                                  itemBuilder: (context, index) {
+                                    final year = DateTime.now().year - index;
+                                    return ListTile(
+                                      title: Text(year.toString()),
+                                      onTap: () {
+                                        setState(() {
+                                          _summaryTableSelectedYear = year;
+                                        });
+                                        Navigator.pop(context);
+                                      },
+                                    );
+                                  },
+                                ),
+                              ),
+                            );
+                          },
+                        );
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: isDark ? Colors.black.withValues(alpha: 0.35) : Colors.white.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: isDark ? Colors.white.withValues(alpha: 0.08) : Colors.white.withValues(alpha: 0.2), width: 1.0),
+                        ),
+                        child: Row(
+                          children: [
+                            Text(
+                              _summaryTableSelectedYear.toString(),
+                              style: theme.textTheme.labelMedium?.copyWith(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            const SizedBox(width: 4),
+                            const Icon(Icons.arrow_drop_down, color: Colors.white, size: 16),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                _EarningsSummaryTable(
+                  platform: _selectedEarningsPlatform,
+                  selectedYear: _summaryTableSelectedYear,
+                  transactions: transactions,
+                  now: now,
+                  isDark: isDark,
+                  theme: theme,
+                ),
+                const SizedBox(height: 28),
                 // ── 4. Business Insights ───────────────────────────────────────
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -362,6 +438,7 @@ class _HomeScreenState extends State<HomeScreen> {
                               _buildInsightsPeriodToggle(ChartPeriod.week, 'Week', theme),
                               _buildInsightsPeriodToggle(ChartPeriod.month, 'Month', theme),
                               _buildInsightsPeriodToggle(ChartPeriod.year, 'Year', theme),
+                              _buildInsightsPeriodToggle(ChartPeriod.allTime, 'All Time', theme),
                             ],
                           ),
                         ),
@@ -869,22 +946,30 @@ class _TrendChartCard extends StatelessWidget {
     final List<String> xLabels = [];
 
     int dataCount = 7;
+    List<int> allTimeYears = [];
+
     if (period == ChartPeriod.week) {
       dataCount = 7;
     } else if (period == ChartPeriod.month) {
-      dataCount = 30;
-    } else {
+      dataCount = (DateTime(now.year, now.month + 1, 0).day / 7).ceil();
+    } else if (period == ChartPeriod.year) {
       dataCount = 12;
+    } else {
+      allTimeYears = transactions.map((t) => t.timestamp.year).toSet().toList()..sort();
+      if (allTimeYears.isEmpty) allTimeYears = [now.year - 1, now.year];
+      if (allTimeYears.length == 1) allTimeYears.insert(0, allTimeYears.first - 1);
+      dataCount = allTimeYears.length;
     }
 
     final List<double> gcashYVals = List.filled(dataCount, 0.0);
     final List<double> mayaYVals = List.filled(dataCount, 0.0);
 
     if (period == ChartPeriod.week) {
-      // 7-day trend
+      // Current Week (Sun - Sat)
+      final sunday = DateTime(now.year, now.month, now.day).subtract(Duration(days: now.weekday == 7 ? 0 : now.weekday));
       for (int i = 0; i < 7; i++) {
-        final targetDate = DateTime(now.year, now.month, now.day).subtract(Duration(days: 6 - i));
-        xLabels.add(DateFormat('E').format(targetDate)); // e.g. Mon, Tue
+        final targetDate = sunday.add(Duration(days: i));
+        xLabels.add(DateFormat('E').format(targetDate));
 
         final dayTxns = transactions.where((t) =>
             t.timestamp.year == targetDate.year &&
@@ -900,39 +985,54 @@ class _TrendChartCard extends StatelessWidget {
             .fold(0.0, (sum, t) => sum + t.amount);
       }
     } else if (period == ChartPeriod.month) {
-      // 30-day daily transactions
-      for (int i = 0; i < 30; i++) {
-        final targetDate = DateTime(now.year, now.month, now.day).subtract(Duration(days: 29 - i));
-        xLabels.add(DateFormat('M/d').format(targetDate)); // e.g. 4/27, 5/2
+      // Current Month (Grouped by Weeks)
+      for (int i = 0; i < dataCount; i++) {
+        xLabels.add('W${i + 1}');
 
-        final dayTxns = transactions.where((t) =>
-            t.timestamp.year == targetDate.year &&
-            t.timestamp.month == targetDate.month &&
-            t.timestamp.day == targetDate.day).toList();
+        final weekTxns = transactions.where((t) {
+          if (t.timestamp.year != now.year || t.timestamp.month != now.month) return false;
+          final weekIndex = ((t.timestamp.day - 1) / 7).floor();
+          return weekIndex == i;
+        }).toList();
 
-        gcashYVals[i] = dayTxns
+        gcashYVals[i] = weekTxns
             .where((t) => t.platform == Platform.gcash)
             .fold(0.0, (sum, t) => sum + t.amount);
 
-        mayaYVals[i] = dayTxns
+        mayaYVals[i] = weekTxns
             .where((t) => t.platform == Platform.maya)
             .fold(0.0, (sum, t) => sum + t.amount);
       }
-    } else {
-      // 12-month summary
+    } else if (period == ChartPeriod.year) {
+      // Current Year (Jan - Dec)
       for (int i = 0; i < 12; i++) {
-        final targetMonth = DateTime(now.year, now.month, 1).subtract(Duration(days: (11 - i) * 30));
-        xLabels.add(DateFormat('MMM').format(targetMonth)); // e.g. Jan, Feb
+        xLabels.add(DateFormat('MMM').format(DateTime(now.year, i + 1, 1)));
 
         final monthTxns = transactions.where((t) =>
-            t.timestamp.year == targetMonth.year &&
-            t.timestamp.month == targetMonth.month).toList();
+            t.timestamp.year == now.year &&
+            t.timestamp.month == i + 1).toList();
 
         gcashYVals[i] = monthTxns
             .where((t) => t.platform == Platform.gcash)
             .fold(0.0, (sum, t) => sum + t.amount);
 
         mayaYVals[i] = monthTxns
+            .where((t) => t.platform == Platform.maya)
+            .fold(0.0, (sum, t) => sum + t.amount);
+      }
+    } else if (period == ChartPeriod.allTime) {
+      // All Time (Grouped by Year)
+      for (int i = 0; i < dataCount; i++) {
+        final targetYear = allTimeYears[i];
+        xLabels.add(targetYear.toString());
+
+        final yearTxns = transactions.where((t) => t.timestamp.year == targetYear).toList();
+
+        gcashYVals[i] = yearTxns
+            .where((t) => t.platform == Platform.gcash)
+            .fold(0.0, (sum, t) => sum + t.amount);
+
+        mayaYVals[i] = yearTxns
             .where((t) => t.platform == Platform.maya)
             .fold(0.0, (sum, t) => sum + t.amount);
       }
@@ -988,7 +1088,7 @@ class _TrendChartCard extends StatelessWidget {
                     sideTitles: SideTitles(
                       showTitles: true,
                       reservedSize: 32,
-                      interval: period == ChartPeriod.month ? 5 : 1, // thin out for month days
+                      interval: 1,
                       getTitlesWidget: (value, meta) {
                         final idx = value.toInt();
                         if (idx >= 0 && idx < xLabels.length) {
@@ -1078,6 +1178,8 @@ class _TrendChartCard extends StatelessWidget {
                 lineTouchData: LineTouchData(
                   touchTooltipData: LineTouchTooltipData(
                     getTooltipColor: (spot) => theme.colorScheme.surfaceContainerHighest,
+                    fitInsideHorizontally: true,
+                    fitInsideVertically: true,
                     getTooltipItems: (touchedSpots) {
                       return touchedSpots.map((spot) {
                         final isGcash = spot.barIndex == 0;
@@ -1223,19 +1325,27 @@ class _EarningsBarChartCard extends StatelessWidget {
     final List<String> xLabels = [];
 
     int dataCount = 7;
+    List<int> allTimeYears = [];
+
     if (period == ChartPeriod.week) {
       dataCount = 7;
     } else if (period == ChartPeriod.month) {
-      dataCount = 30;
-    } else {
+      dataCount = (DateTime(now.year, now.month + 1, 0).day / 7).ceil();
+    } else if (period == ChartPeriod.year) {
       dataCount = 12;
+    } else {
+      allTimeYears = transactions.map((t) => t.timestamp.year).toSet().toList()..sort();
+      if (allTimeYears.isEmpty) allTimeYears = [now.year - 1, now.year];
+      if (allTimeYears.length == 1) allTimeYears.insert(0, allTimeYears.first - 1);
+      dataCount = allTimeYears.length;
     }
 
     final List<double> earningsYVals = List.filled(dataCount, 0.0);
 
     if (period == ChartPeriod.week) {
+      final sunday = DateTime(now.year, now.month, now.day).subtract(Duration(days: now.weekday == 7 ? 0 : now.weekday));
       for (int i = 0; i < 7; i++) {
-        final targetDate = DateTime(now.year, now.month, now.day).subtract(Duration(days: 6 - i));
+        final targetDate = sunday.add(Duration(days: i));
         xLabels.add(DateFormat('E').format(targetDate));
 
         final dayTxns = transactions.where((t) =>
@@ -1247,29 +1357,38 @@ class _EarningsBarChartCard extends StatelessWidget {
         earningsYVals[i] = dayTxns.fold(0.0, (sum, t) => sum + (t.fee ?? 0.0));
       }
     } else if (period == ChartPeriod.month) {
-      for (int i = 0; i < 30; i++) {
-        final targetDate = DateTime(now.year, now.month, now.day).subtract(Duration(days: 29 - i));
-        xLabels.add(DateFormat('M/d').format(targetDate));
+      for (int i = 0; i < dataCount; i++) {
+        xLabels.add('W${i + 1}');
 
-        final dayTxns = transactions.where((t) =>
-            t.platform == platform &&
-            t.timestamp.year == targetDate.year &&
-            t.timestamp.month == targetDate.month &&
-            t.timestamp.day == targetDate.day).toList();
+        final weekTxns = transactions.where((t) {
+          if (t.platform != platform || t.timestamp.year != now.year || t.timestamp.month != now.month) return false;
+          final weekIndex = ((t.timestamp.day - 1) / 7).floor();
+          return weekIndex == i;
+        }).toList();
 
-        earningsYVals[i] = dayTxns.fold(0.0, (sum, t) => sum + (t.fee ?? 0.0));
+        earningsYVals[i] = weekTxns.fold(0.0, (sum, t) => sum + (t.fee ?? 0.0));
       }
-    } else {
+    } else if (period == ChartPeriod.year) {
       for (int i = 0; i < 12; i++) {
-        final targetMonth = DateTime(now.year, now.month, 1).subtract(Duration(days: (11 - i) * 30));
-        xLabels.add(DateFormat('MMM').format(targetMonth));
+        xLabels.add(DateFormat('MMM').format(DateTime(now.year, i + 1, 1)));
 
         final monthTxns = transactions.where((t) =>
             t.platform == platform &&
-            t.timestamp.year == targetMonth.year &&
-            t.timestamp.month == targetMonth.month).toList();
+            t.timestamp.year == now.year &&
+            t.timestamp.month == i + 1).toList();
 
         earningsYVals[i] = monthTxns.fold(0.0, (sum, t) => sum + (t.fee ?? 0.0));
+      }
+    } else if (period == ChartPeriod.allTime) {
+      for (int i = 0; i < dataCount; i++) {
+        final targetYear = allTimeYears[i];
+        xLabels.add(targetYear.toString());
+
+        final yearTxns = transactions.where((t) => 
+            t.platform == platform &&
+            t.timestamp.year == targetYear).toList();
+
+        earningsYVals[i] = yearTxns.fold(0.0, (sum, t) => sum + (t.fee ?? 0.0));
       }
     }
 
@@ -1289,7 +1408,7 @@ class _EarningsBarChartCard extends StatelessWidget {
           BarChartRodData(
             toY: earningsYVals[i],
             color: color,
-            width: period == ChartPeriod.month ? 4.5 : 14,
+            width: 14,
             borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
             backDrawRodData: BackgroundBarChartRodData(
               show: true,
@@ -1362,12 +1481,9 @@ class _EarningsBarChartCard extends StatelessWidget {
                     sideTitles: SideTitles(
                       showTitles: true,
                       reservedSize: 32,
-                      interval: period == ChartPeriod.month ? 5 : 1,
+                      interval: 1,
                       getTitlesWidget: (value, meta) {
                         final idx = value.toInt();
-                        if (period == ChartPeriod.month && idx % 5 != 0 && idx != xLabels.length - 1) {
-                          return const SizedBox.shrink();
-                        }
                         if (idx >= 0 && idx < xLabels.length) {
                           return Padding(
                             padding: const EdgeInsets.only(top: 8.0),
@@ -1479,6 +1595,224 @@ class _LiveClockState extends State<_LiveClock> {
       style: widget.textStyle,
       overflow: TextOverflow.ellipsis,
       maxLines: 1,
+    );
+  }
+}
+class _EarningsSummaryTable extends StatelessWidget {
+  final Platform platform;
+  final int selectedYear;
+  final List<TransactionRecord> transactions;
+  final DateTime now;
+  final bool isDark;
+  final ThemeData theme;
+
+  const _EarningsSummaryTable({
+    required this.platform,
+    required this.selectedYear,
+    required this.transactions,
+    required this.now,
+    required this.isDark,
+    required this.theme,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final color = platform == Platform.maya ? AppColors.maya : AppColors.gcash;
+
+    // Only show years that have actual transaction data for this platform
+    final yearsWithData = transactions
+        .where((t) => t.platform == platform)
+        .map((t) => t.timestamp.year)
+        .toSet();
+
+    // From candidate years, only keep those with real data and <= now.year
+    final years = [selectedYear - 2, selectedYear - 1, selectedYear]
+        .where((y) => yearsWithData.contains(y) && y <= now.year)
+        .toList();
+
+    final currencyFormat = NumberFormat.currency(
+      locale: 'en_PH',
+      symbol: '₱',
+      decimalDigits: 2,
+    );
+
+    // Build dynamic column widths based on visible year count
+    final Map<int, TableColumnWidth> colWidths = {
+      0: const FlexColumnWidth(1.2),
+    };
+    for (int i = 0; i < years.length; i++) {
+      colWidths[i + 1] = const FlexColumnWidth(1);
+    }
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(24),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 0, sigmaY: 0),
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: isDark ? Colors.black.withValues(alpha: 0.35) : Colors.white.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(
+              color: isDark ? Colors.white.withValues(alpha: 0.08) : Colors.white.withValues(alpha: 0.2),
+              width: 1.0,
+            ),
+          ),
+          child: years.isEmpty
+              ? Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 24),
+                  child: Text(
+                    'No earnings data available',
+                    textAlign: TextAlign.center,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: Colors.white.withValues(alpha: 0.4),
+                    ),
+                  ),
+                )
+              : Table(
+                  columnWidths: colWidths,
+                  children: [
+                    TableRow(
+                      decoration: BoxDecoration(
+                        border: Border(bottom: BorderSide(color: Colors.white.withValues(alpha: 0.1))),
+                      ),
+                      children: [
+                        _buildHeaderCell('Month', theme),
+                        for (final y in years)
+                          _buildHeaderCell(y.toString(), theme, highlight: y == now.year),
+                      ],
+                    ),
+                    for (int month = 1; month <= now.month; month++)
+                      TableRow(
+                        decoration: BoxDecoration(
+                          color: month == now.month ? Colors.white.withValues(alpha: 0.03) : null,
+                          border: Border(bottom: BorderSide(color: Colors.white.withValues(alpha: 0.05))),
+                        ),
+                        children: [
+                          _buildMonthCell(DateFormat('MMM').format(DateTime(2000, month, 1)), theme, highlight: month == now.month),
+                          for (final y in years)
+                            _buildDataCell(month: month, year: y, color: color, currencyFormat: currencyFormat),
+                        ],
+                      ),
+                    TableRow(
+                      decoration: BoxDecoration(
+                        border: Border(top: BorderSide(color: Colors.white.withValues(alpha: 0.1))),
+                      ),
+                      children: [
+                        _buildHeaderCell('Total', theme),
+                        for (final y in years)
+                          _buildTotalCell(year: y, color: color, currencyFormat: currencyFormat, theme: theme),
+                      ],
+                    ),
+                  ],
+                ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHeaderCell(String text, ThemeData theme, {bool highlight = false}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      child: Text(
+        text,
+        style: theme.textTheme.labelMedium?.copyWith(
+          fontWeight: FontWeight.w800,
+          color: highlight ? Colors.white : Colors.white.withValues(alpha: 0.5),
+        ),
+        textAlign: TextAlign.center,
+      ),
+    );
+  }
+
+  Widget _buildMonthCell(String text, ThemeData theme, {bool highlight = false}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      child: Text(
+        text,
+        style: theme.textTheme.bodySmall?.copyWith(
+          fontWeight: highlight ? FontWeight.w800 : FontWeight.w600,
+          color: highlight ? Colors.white : Colors.white.withValues(alpha: 0.7),
+        ),
+        textAlign: TextAlign.center,
+      ),
+    );
+  }
+
+  Widget _buildDataCell({
+    required int month,
+    required int year,
+    required Color color,
+    required NumberFormat currencyFormat,
+  }) {
+    if (year == now.year && month > now.month) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 12),
+        child: Text('-', textAlign: TextAlign.center, style: TextStyle(color: Colors.white30, fontSize: 11)),
+      );
+    }
+
+    final monthTxns = transactions.where((t) =>
+        t.platform == platform &&
+        t.timestamp.year == year &&
+        t.timestamp.month == month);
+
+    final total = monthTxns.fold(0.0, (sum, t) => sum + (t.fee ?? 0.0));
+    final isCurrentCell = month == now.month && year == now.year;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 2),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 2, horizontal: 4),
+        decoration: isCurrentCell
+            ? BoxDecoration(
+                color: color.withValues(alpha: 0.2),
+                borderRadius: BorderRadius.circular(4),
+                border: Border.all(color: color.withValues(alpha: 0.5)),
+              )
+            : null,
+        child: Text(
+          total > 0 ? currencyFormat.format(total) : '₱0.00',
+          style: TextStyle(
+            color: isCurrentCell
+                ? color
+                : total > 0
+                    ? Colors.white.withValues(alpha: 0.85)
+                    : Colors.white.withValues(alpha: 0.25),
+            fontWeight: isCurrentCell ? FontWeight.w800 : FontWeight.w500,
+            fontSize: 10,
+          ),
+          textAlign: TextAlign.center,
+          textScaler: TextScaler.noScaling,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTotalCell({
+    required int year,
+    required Color color,
+    required NumberFormat currencyFormat,
+    required ThemeData theme,
+  }) {
+    final yearTxns = transactions.where((t) =>
+        t.platform == platform &&
+        t.timestamp.year == year);
+
+    final total = yearTxns.fold(0.0, (sum, t) => sum + (t.fee ?? 0.0));
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      child: Text(
+        total > 0 ? currencyFormat.format(total) : '₱0.00',
+        style: theme.textTheme.labelMedium?.copyWith(
+          color: total > 0 ? color : Colors.white.withValues(alpha: 0.5),
+          fontWeight: FontWeight.w800,
+          fontSize: 11,
+        ),
+        textAlign: TextAlign.center,
+        textScaler: TextScaler.noScaling,
+      ),
     );
   }
 }

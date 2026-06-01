@@ -161,13 +161,13 @@ class DataScreenState extends State<DataScreen>
   }
 
   /// Shows the confirm sheet. Returns true if user confirmed + saved.
-  Future<void> _showConfirmDialog(ParsedReceipt receipt) async {
+  Future<void> _showConfirmDialog(ParsedReceipt receipt, {bool isManual = false}) async {
     final editedReceipt = await showModalBottomSheet<ParsedReceipt>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       isDismissible: false,
-      builder: (ctx) => _ConfirmEntrySheet(receipt: receipt),
+      builder: (ctx) => _ConfirmEntrySheet(receipt: receipt, isManual: isManual),
     );
 
     if (editedReceipt == null || !mounted) return;
@@ -197,6 +197,7 @@ class DataScreenState extends State<DataScreen>
         allowUpload: allowUpload,
         onUpload: () => Navigator.pop(ctx, 'upload'),
         onPaste: () => Navigator.pop(ctx, 'paste'),
+        onManual: () => Navigator.pop(ctx, 'manual'),
       ),
     );
 
@@ -208,8 +209,16 @@ class DataScreenState extends State<DataScreen>
 
     if (action == 'upload') {
       await _pickImageFromGallery();
-    } else {
+    } else if (action == 'paste') {
       await _openPasteDialog(platform);
+    } else if (action == 'manual') {
+      final emptyReceipt = ParsedReceipt(
+        rawText: '',
+        platform: platform,
+        transactionType: TransactionType.sent,
+        transactionDate: DateTime.now(),
+      );
+      await _showConfirmDialog(emptyReceipt, isManual: true);
     }
   }
 
@@ -627,6 +636,7 @@ class _AddActionSheet extends StatelessWidget {
   final bool allowUpload;
   final VoidCallback onUpload;
   final VoidCallback onPaste;
+  final VoidCallback onManual;
 
   const _AddActionSheet({
     required this.platform,
@@ -634,6 +644,7 @@ class _AddActionSheet extends StatelessWidget {
     required this.allowUpload,
     required this.onUpload,
     required this.onPaste,
+    required this.onManual,
   });
 
   @override
@@ -701,6 +712,13 @@ class _AddActionSheet extends StatelessWidget {
               subtitle: 'Paste a ${platform == Platform.gcash ? 'GCash' : 'Maya Business'} notification message',
               color: activeColor,
               onTap: onPaste,
+            ),
+            _SheetOption(
+              icon: Icons.keyboard_rounded,
+              title: 'Manual Input',
+              subtitle: 'Manually type in the transaction details',
+              color: activeColor,
+              onTap: onManual,
             ),
             const SizedBox(height: 8),
           ],
@@ -1051,10 +1069,24 @@ class _TransactionCardState extends State<_TransactionCard> {
                           ),
                           overflow: TextOverflow.ellipsis,
                         ),
+                        if (widget.record.serviceProvider != null && widget.record.serviceProvider!.trim().isNotEmpty) ...[
+                          const SizedBox(height: 3),
+                          Text(
+                            widget.record.serviceProvider!,
+                            style: theme.textTheme.labelLarge?.copyWith(
+                              fontWeight: FontWeight.w700,
+                              color: (widget.record.senderNumber != null && widget.record.senderNumber!.trim().isNotEmpty)
+                                  ? const Color(0xFFE91E63) // Pink for Load
+                                  : const Color(0xFF0288D1), // Blue for Pay Bills
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                            maxLines: 1,
+                          ),
+                        ],
                         const SizedBox(height: 3),
                         Text(
                           widget.record.senderNumber ?? 'No Contact Number',
-                          style: theme.textTheme.bodySmall?.copyWith(
+                          style: theme.textTheme.labelMedium?.copyWith(
                             color: theme.colorScheme.onSurface.withValues(alpha: 0.55),
                           ),
                           overflow: TextOverflow.ellipsis,
@@ -1064,58 +1096,54 @@ class _TransactionCardState extends State<_TransactionCard> {
                     ),
                   ),
 
-                  Flexible(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        Row(
-                          mainAxisSize: MainAxisSize.min,
-                          crossAxisAlignment: CrossAxisAlignment.center,
-                          children: [
-                            Flexible(
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          Text(
+                            currency.format(widget.record.amount),
+                            style: theme.textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.w700,
+                              color: widget.record.transactionType == TransactionType.received
+                                  ? const Color(0xFF2E7D32)
+                                  : theme.colorScheme.onSurface,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                            maxLines: 1,
+                          ),
+                          if (widget.record.fee != null && widget.record.fee! > 0) ...[
+                            const SizedBox(width: 6),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
+                              decoration: BoxDecoration(
+                                color: Colors.purple.shade400.withValues(alpha: 0.12),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
                               child: Text(
-                                currency.format(widget.record.amount),
-                                style: theme.textTheme.titleMedium?.copyWith(
-                                  fontWeight: FontWeight.w700,
-                                  color: widget.record.transactionType == TransactionType.received
-                                      ? const Color(0xFF2E7D32)
-                                      : theme.colorScheme.onSurface,
+                                '+₱${widget.record.fee!.toStringAsFixed(widget.record.fee! % 1 == 0 ? 0 : 2)}',
+                                textScaler: TextScaler.noScaling,
+                                style: theme.textTheme.labelMedium?.copyWith(
+                                  color: Colors.purple.shade400,
+                                  fontWeight: FontWeight.w800,
                                 ),
-                                overflow: TextOverflow.ellipsis,
-                                maxLines: 1,
                               ),
                             ),
-                            if (widget.record.fee != null && widget.record.fee! > 0) ...[
-                              const SizedBox(width: 6),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
-                                decoration: BoxDecoration(
-                                  color: Colors.purple.shade400.withValues(alpha: 0.12),
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: Text(
-                                  '+₱${widget.record.fee!.toStringAsFixed(widget.record.fee! % 1 == 0 ? 0 : 2)}',
-                                  textScaler: TextScaler.noScaling,
-                                  style: theme.textTheme.labelMedium?.copyWith(
-                                    color: Colors.purple.shade400,
-                                    fontWeight: FontWeight.w800,
-                                  ),
-                                ),
-                              ),
-                            ],
                           ],
+                        ],
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        DateFormat('MMM d, yyyy • hh:mm a').format(widget.record.timestamp),
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: theme.colorScheme.onSurface.withValues(alpha: 0.40),
                         ),
-                        const SizedBox(height: 3),
-                        Text(
-                          DateFormat('MMM d, yyyy • hh:mm a').format(widget.record.timestamp),
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: theme.colorScheme.onSurface.withValues(alpha: 0.40),
-                          ),
-                          overflow: TextOverflow.ellipsis,
-                          maxLines: 1,
-                        ),
-                      ],
-                    ),
+                        overflow: TextOverflow.ellipsis,
+                        maxLines: 1,
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -1186,7 +1214,9 @@ class _TransactionDetailsSheet extends StatefulWidget {
 class _TransactionDetailsSheetState extends State<_TransactionDetailsSheet> {
   final _db = IsarService();
   late final TextEditingController _nameController;
+  late final TextEditingController _accountNumberController;
   late final TextEditingController _phoneController;
+  late final TextEditingController _serviceProviderController;
   late final TextEditingController _amountController;
   late final TextEditingController _feeController;
   late final TextEditingController _dateController;
@@ -1216,7 +1246,9 @@ class _TransactionDetailsSheetState extends State<_TransactionDetailsSheet> {
     super.initState();
     final r = widget.record;
     _nameController = TextEditingController(text: r.senderName ?? '');
+    _accountNumberController = TextEditingController(text: r.accountNumber ?? '');
     _phoneController = TextEditingController(text: r.senderNumber ?? '');
+    _serviceProviderController = TextEditingController(text: r.serviceProvider ?? '');
     _amountController = TextEditingController(text: r.amount.toStringAsFixed(2));
     _feeController = TextEditingController(
       text: r.fee?.toStringAsFixed(2) ?? '',
@@ -1247,7 +1279,9 @@ class _TransactionDetailsSheetState extends State<_TransactionDetailsSheet> {
     _amountController.removeListener(_onAmountChanged);
     _feeController.removeListener(_onFeeChanged);
     _nameController.dispose();
+    _accountNumberController.dispose();
     _phoneController.dispose();
+    _serviceProviderController.dispose();
     _amountController.dispose();
     _feeController.dispose();
     _dateController.dispose();
@@ -1258,7 +1292,7 @@ class _TransactionDetailsSheetState extends State<_TransactionDetailsSheet> {
   }
 
   void _onAmountChanged() {
-    final amt = double.tryParse(_amountController.text.trim()) ?? 0.0;
+    final amt = double.tryParse(_amountController.text.replaceAll(',', '').trim()) ?? 0.0;
     _db.calculateFeeForAmount(amt).then((fee) {
       if (mounted) {
         setState(() {
@@ -1330,8 +1364,8 @@ class _TransactionDetailsSheetState extends State<_TransactionDetailsSheet> {
   }
 
   Future<void> _onSave() async {
-    final amtVal = double.tryParse(_amountController.text.trim()) ?? widget.record.amount;
-    final balVal = double.tryParse(_balanceController.text.trim());
+    final amtVal = double.tryParse(_amountController.text.replaceAll(',', '').trim()) ?? 0.0;
+    final balVal = double.tryParse(_balanceController.text.replaceAll(',', '').trim());
     DateTime dtVal;
     try {
       final dateStr = _dateController.text.trim();
@@ -1342,13 +1376,17 @@ class _TransactionDetailsSheetState extends State<_TransactionDetailsSheet> {
     }
 
     final newName = _nameController.text.trim().isEmpty ? null : _nameController.text.trim();
+    final newAccount = _accountNumberController.text.trim().isEmpty ? null : _accountNumberController.text.trim();
     final newPhone = _phoneController.text.trim().isEmpty ? null : _phoneController.text.trim();
+    final newProvider = _serviceProviderController.text.trim().isEmpty ? null : _serviceProviderController.text.trim();
     final newRef = _refController.text.trim().isEmpty ? 'UNKNOWN' : _refController.text.trim();
 
-    final feeVal = double.tryParse(_feeController.text.trim());
+    final feeVal = double.tryParse(_feeController.text.replaceAll(',', '').trim());
 
     final isNameChanged = newName != widget.record.senderName;
+    final isAccountChanged = newAccount != widget.record.accountNumber;
     final isPhoneChanged = newPhone != widget.record.senderNumber;
+    final isProviderChanged = newProvider != widget.record.serviceProvider;
     final isAmountChanged = amtVal != widget.record.amount;
     final isDateChanged = dtVal != widget.record.timestamp;
     final isRefChanged = newRef != widget.record.referenceNumber;
@@ -1357,7 +1395,9 @@ class _TransactionDetailsSheetState extends State<_TransactionDetailsSheet> {
     final isFeeChanged = feeVal != widget.record.fee;
 
     final hasChanges = isNameChanged ||
+        isAccountChanged ||
         isPhoneChanged ||
+        isProviderChanged ||
         isAmountChanged ||
         isDateChanged ||
         isRefChanged ||
@@ -1374,7 +1414,9 @@ class _TransactionDetailsSheetState extends State<_TransactionDetailsSheet> {
 
     final updated = widget.record
       ..senderName = newName
+      ..accountNumber = newAccount
       ..senderNumber = newPhone
+      ..serviceProvider = newProvider
       ..amount = amtVal
       ..timestamp = dtVal
       ..referenceNumber = newRef
@@ -1451,45 +1493,12 @@ class _TransactionDetailsSheetState extends State<_TransactionDetailsSheet> {
               // Sent vs Received Segmented Selector
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: SizedBox(
-                  width: double.infinity,
-                  child: SegmentedButton<TransactionType>(
-                    segments: [
-                      ButtonSegment(
-                        value: TransactionType.sent,
-                        label: const Text('Sent'),
-                        icon: const Icon(Icons.arrow_upward_rounded, size: 18),
-                      ),
-                      ButtonSegment(
-                        value: TransactionType.received,
-                        label: const Text('Received'),
-                        icon: const Icon(Icons.arrow_downward_rounded, size: 18),
-                      ),
-                    ],
-                    selected: {_transactionType},
-                    onSelectionChanged: (set) {
-                      setState(() {
-                        _transactionType = set.first;
-                      });
-                    },
-                    style: SegmentedButton.styleFrom(
-                      selectedBackgroundColor: (_transactionType == TransactionType.received
-                          ? const Color(0xFF2E7D32)
-                          : const Color(0xFF1976D2)).withValues(alpha: 0.14),
-                      selectedForegroundColor: _transactionType == TransactionType.received
-                          ? const Color(0xFF2E7D32)
-                          : const Color(0xFF1976D2),
-                      side: BorderSide(
-                        color: (_transactionType == TransactionType.received
-                            ? const Color(0xFF2E7D32)
-                            : const Color(0xFF1976D2)).withValues(alpha: 0.35),
-                        width: 1.5,
-                      ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                  ),
+                child: _TransactionTypeSelector(
+                  platform: widget.record.platform,
+                  selectedType: _transactionType,
+                  onChanged: (type) {
+                    setState(() => _transactionType = type);
+                  },
                 ),
               ),
               const SizedBox(height: 8),
@@ -1500,11 +1509,20 @@ class _TransactionDetailsSheetState extends State<_TransactionDetailsSheet> {
                   padding: const EdgeInsets.symmetric(horizontal: 20),
                   children: [
                     _EditField(
-                      label: 'Name (Recipient)',
+                      label: 'Name',
                       controller: _nameController,
                       icon: Icons.person_outline_rounded,
                       activeColor: color,
                     ),
+                    if (widget.record.platform == Platform.maya && _transactionType != TransactionType.sent && _transactionType != TransactionType.received) ...[
+                      _EditField(
+                        label: 'Account Number',
+                        controller: _accountNumberController,
+                        icon: Icons.account_balance_wallet_rounded,
+                        keyboardType: TextInputType.number,
+                        activeColor: color,
+                      ),
+                    ],
                     _EditField(
                       label: 'Contact Number',
                       controller: _phoneController,
@@ -1512,6 +1530,14 @@ class _TransactionDetailsSheetState extends State<_TransactionDetailsSheet> {
                       keyboardType: TextInputType.phone,
                       activeColor: color,
                     ),
+                    if (widget.record.platform == Platform.maya && _transactionType != TransactionType.sent && _transactionType != TransactionType.received) ...[
+                      _EditField(
+                        label: 'Service Provider',
+                        controller: _serviceProviderController,
+                        icon: Icons.business_rounded,
+                        activeColor: color,
+                      ),
+                    ],
                     Row(
                       children: [
                         Expanded(
@@ -1844,11 +1870,11 @@ class _PasteTextSheetState extends State<_PasteTextSheet> {
               ),
               const SizedBox(height: 14),
               Padding(
-                padding: const EdgeInsets.fromLTRB(
+                padding: EdgeInsets.fromLTRB(
                   20,
                   0,
                   20,
-                  20,
+                  20 + MediaQuery.of(context).padding.bottom,
                 ),
                 child: SizedBox(
                   width: double.infinity,
@@ -1878,8 +1904,12 @@ class _PasteTextSheetState extends State<_PasteTextSheet> {
 
 class _ConfirmEntrySheet extends StatefulWidget {
   final ParsedReceipt receipt;
+  final bool isManual;
 
-  const _ConfirmEntrySheet({required this.receipt});
+  const _ConfirmEntrySheet({
+    required this.receipt,
+    this.isManual = false,
+  });
 
   @override
   State<_ConfirmEntrySheet> createState() => _ConfirmEntrySheetState();
@@ -1888,13 +1918,16 @@ class _ConfirmEntrySheet extends StatefulWidget {
 class _ConfirmEntrySheetState extends State<_ConfirmEntrySheet> {
   final _db = IsarService();
   late final TextEditingController _nameController;
+  late final TextEditingController _accountNumberController;
   late final TextEditingController _phoneController;
+  late final TextEditingController _serviceProviderController;
   late final TextEditingController _amountController;
   late final TextEditingController _feeController;
   late final TextEditingController _dateController;
   late final TextEditingController _timeController;
   late final TextEditingController _refController;
   late final TextEditingController _balanceController;
+  late TransactionType _selectedType;
 
   static const _platformNames = {
     Platform.gcash: 'GCash',
@@ -1916,8 +1949,11 @@ class _ConfirmEntrySheetState extends State<_ConfirmEntrySheet> {
   void initState() {
     super.initState();
     final r = widget.receipt;
+    _selectedType = r.transactionType;
     _nameController = TextEditingController(text: r.personName ?? '');
+    _accountNumberController = TextEditingController(text: r.accountNumber ?? '');
     _phoneController = TextEditingController(text: r.phoneNumber ?? '');
+    _serviceProviderController = TextEditingController(text: r.serviceProvider ?? '');
     _amountController = TextEditingController(
       text: r.amount?.toStringAsFixed(2) ?? '',
     );
@@ -1958,6 +1994,7 @@ class _ConfirmEntrySheetState extends State<_ConfirmEntrySheet> {
     _amountController.removeListener(_onAmountChanged);
     _feeController.removeListener(_onFeeChanged);
     _nameController.dispose();
+    _accountNumberController.dispose();
     _phoneController.dispose();
     _amountController.dispose();
     _feeController.dispose();
@@ -1969,7 +2006,7 @@ class _ConfirmEntrySheetState extends State<_ConfirmEntrySheet> {
   }
 
   void _onAmountChanged() {
-    final amt = double.tryParse(_amountController.text.trim()) ?? 0.0;
+    final amt = double.tryParse(_amountController.text.replaceAll(',', '').trim()) ?? 0.0;
     _db.calculateFeeForAmount(amt).then((fee) {
       if (mounted) {
         setState(() {
@@ -2045,8 +2082,8 @@ class _ConfirmEntrySheetState extends State<_ConfirmEntrySheet> {
   }
 
   void _onSave() {
-    final amtVal = double.tryParse(_amountController.text.trim());
-    final balVal = double.tryParse(_balanceController.text.trim());
+    final amtVal = double.tryParse(_amountController.text.replaceAll(',', '').trim());
+    final balVal = double.tryParse(_balanceController.text.replaceAll(',', '').trim());
     DateTime? dtVal;
     try {
       final datePart = DateFormat('MMM d, yyyy').parse(_dateController.text.trim());
@@ -2056,11 +2093,11 @@ class _ConfirmEntrySheetState extends State<_ConfirmEntrySheet> {
       dtVal = widget.receipt.transactionDate ?? DateTime.now();
     }
 
-    final feeVal = double.tryParse(_feeController.text.trim());
+    final feeVal = double.tryParse(_feeController.text.replaceAll(',', '').trim());
     final edited = ParsedReceipt(
       rawText: widget.receipt.rawText,
       platform: widget.receipt.platform,
-      transactionType: widget.receipt.transactionType,
+      transactionType: _selectedType,
       amount: amtVal,
       referenceNumber: _refController.text.trim().isEmpty
           ? null
@@ -2068,9 +2105,15 @@ class _ConfirmEntrySheetState extends State<_ConfirmEntrySheet> {
       personName: _nameController.text.trim().isEmpty
           ? null
           : _nameController.text.trim(),
+      accountNumber: _accountNumberController.text.trim().isEmpty
+          ? null
+          : _accountNumberController.text.trim(),
       phoneNumber: _phoneController.text.trim().isEmpty
           ? null
           : _phoneController.text.trim(),
+      serviceProvider: _serviceProviderController.text.trim().isEmpty
+          ? null
+          : _serviceProviderController.text.trim(),
       transactionDate: dtVal,
       remainingBalance: balVal,
       fee: feeVal,
@@ -2119,42 +2162,73 @@ class _ConfirmEntrySheetState extends State<_ConfirmEntrySheet> {
                 ),
                 child: Text(
                   _platformNames[widget.receipt.platform] ?? 'Unknown',
-                  style: TextStyle(
+                  style: theme.textTheme.labelLarge?.copyWith(
                     color: color,
                     fontWeight: FontWeight.w800,
-                    fontSize: 14,
                   ),
                 ),
               ),
               const SizedBox(height: 10),
 
               Text(
-                'Verify & Correct Transaction',
-                style: theme.textTheme.titleMedium?.copyWith(
+                widget.isManual ? 'Manual Input' : 'Verify & Correct Transaction',
+                style: theme.textTheme.titleLarge?.copyWith(
                   fontWeight: FontWeight.w800,
-                  fontSize: 18,
                 ),
               ),
               const SizedBox(height: 4),
               Text(
-                'OCR extracted fields. Correct any errors below.',
+                widget.isManual ? 'Enter transaction details manually below.' : 'OCR extracted fields. Correct any errors below.',
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
                 ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 14),
 
               Expanded(
                 child: ListView(
                   controller: sc,
                   padding: const EdgeInsets.symmetric(horizontal: 20),
                   children: [
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 8.0),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Transaction Type',
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              fontWeight: FontWeight.w700,
+                              color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          _TransactionTypeSelector(
+                            platform: widget.receipt.platform,
+                            selectedType: _selectedType,
+                            onChanged: (type) {
+                              setState(() => _selectedType = type);
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 8),
                     _EditField(
-                      label: 'Name (Recipient)',
+                      label: 'Name',
                       controller: _nameController,
                       icon: Icons.person_outline_rounded,
                       activeColor: color,
                     ),
+                    if (widget.receipt.platform == Platform.maya && _selectedType != TransactionType.sent && _selectedType != TransactionType.received) ...[
+                      _EditField(
+                        label: 'Account Number',
+                        controller: _accountNumberController,
+                        icon: Icons.account_balance_wallet_rounded,
+                        keyboardType: TextInputType.number,
+                        activeColor: color,
+                      ),
+                    ],
                     _EditField(
                       label: 'Contact Number',
                       controller: _phoneController,
@@ -2162,6 +2236,14 @@ class _ConfirmEntrySheetState extends State<_ConfirmEntrySheet> {
                       keyboardType: TextInputType.phone,
                       activeColor: color,
                     ),
+                    if (widget.receipt.platform == Platform.maya && _selectedType != TransactionType.sent && _selectedType != TransactionType.received) ...[
+                      _EditField(
+                        label: 'Service Provider',
+                        controller: _serviceProviderController,
+                        icon: Icons.business_rounded,
+                        activeColor: color,
+                      ),
+                    ],
                     Row(
                       children: [
                         Expanded(
@@ -2405,6 +2487,96 @@ class _EditField extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _TransactionTypeSelector extends StatelessWidget {
+  final Platform platform;
+  final TransactionType selectedType;
+  final ValueChanged<TransactionType> onChanged;
+
+  const _TransactionTypeSelector({
+    super.key,
+    required this.platform,
+    required this.selectedType,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    // If it's GCash, restrict to Sent/Received.
+    final bool isGcash = platform == Platform.gcash;
+    
+    // Ensure selected type is within allowed types to prevent crash
+    TransactionType validSelectedType = selectedType;
+    if (isGcash && selectedType != TransactionType.sent && selectedType != TransactionType.received) {
+      validSelectedType = TransactionType.sent;
+    } else if (!isGcash && selectedType != TransactionType.sent && selectedType != TransactionType.received && selectedType != TransactionType.payment) {
+      validSelectedType = TransactionType.payment;
+    }
+
+    final List<ButtonSegment<TransactionType>> segments = isGcash
+        ? const [
+            ButtonSegment<TransactionType>(
+              value: TransactionType.sent,
+              label: Text('Sent'),
+              icon: Icon(Icons.arrow_upward_rounded, size: 16),
+            ),
+            ButtonSegment<TransactionType>(
+              value: TransactionType.received,
+              label: Text('Received'),
+              icon: Icon(Icons.arrow_downward_rounded, size: 16),
+            ),
+          ]
+        : const [
+            ButtonSegment<TransactionType>(
+              value: TransactionType.sent,
+              label: Text('Sent'),
+              icon: Icon(Icons.arrow_upward_rounded, size: 16),
+            ),
+            ButtonSegment<TransactionType>(
+              value: TransactionType.received,
+              label: Text('Received'),
+              icon: Icon(Icons.arrow_downward_rounded, size: 16),
+            ),
+            ButtonSegment<TransactionType>(
+              value: TransactionType.payment,
+              label: Text('Bills / Load'),
+              icon: Icon(Icons.payment_rounded, size: 16),
+            ),
+          ];
+
+    Color getSelectedColor(TransactionType type) {
+      if (type == TransactionType.received || type == TransactionType.cashIn) {
+        return const Color(0xFF2E7D32);
+      } else if (type == TransactionType.payment) {
+        return const Color(0xFFE65100);
+      }
+      return const Color(0xFF1976D2);
+    }
+
+    final activeColor = getSelectedColor(validSelectedType);
+
+    return SizedBox(
+      width: double.infinity,
+      child: SegmentedButton<TransactionType>(
+        segments: segments,
+        selected: {validSelectedType},
+        onSelectionChanged: (set) => onChanged(set.first),
+        showSelectedIcon: false,
+        style: SegmentedButton.styleFrom(
+          selectedBackgroundColor: activeColor.withValues(alpha: 0.14),
+          selectedForegroundColor: activeColor,
+          side: BorderSide(
+            color: activeColor.withValues(alpha: 0.35),
+            width: 1.5,
+          ),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+        ),
       ),
     );
   }
