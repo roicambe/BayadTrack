@@ -57,7 +57,7 @@ class _MayaFeeSettingsScreenState extends State<MayaFeeSettingsScreen> {
     
     final providerController = TextEditingController(text: isEditing ? existingKey : '');
     final feeController = TextEditingController(
-      text: isEditing ? _feesMap[existingKey!]?.toStringAsFixed(0) : '',
+      text: isEditing ? _feesMap[existingKey]?.toStringAsFixed(0) : '',
     );
 
     final formKey = GlobalKey<FormState>();

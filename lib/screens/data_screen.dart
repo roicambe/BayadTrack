@@ -43,6 +43,15 @@ class DataScreenState extends State<DataScreen>
   static const _tabColors = [AppColors.gcash, AppColors.maya];
   static const _tabPlatforms = [Platform.gcash, Platform.maya];
 
+  // Filter states
+  String _searchQuery = '';
+  DateTimeRange? _dateFilter;
+  bool _showSent = true;
+  bool _showReceived = true;
+  bool _showBills = true;
+  bool _showLoad = true;
+  Set<String> _selectedProviders = {};
+
   @override
   void initState() {
     super.initState();
@@ -232,11 +241,32 @@ class DataScreenState extends State<DataScreen>
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // ── Minimal tab navigation ─────────────────────────────────────
+              // ── Tab navigation & Icons ─────────────────────────────────────
               Padding(
                 padding: const EdgeInsets.fromLTRB(20, 22, 20, 0),
-                child: Center(
-                  child: _MinimalTabBar(controller: _tabController),
+                child: AnimatedBuilder(
+                  animation: _tabController,
+                  builder: (context, _) {
+                    final color = _tabColors[_tabController.index];
+                    return Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.print_rounded),
+                          color: color,
+                          onPressed: () {
+                            AppToast.info(context, 'Printing feature is not yet available.');
+                          },
+                        ),
+                        _MinimalTabBar(controller: _tabController),
+                        IconButton(
+                          icon: const Icon(Icons.search_rounded),
+                          color: color,
+                          onPressed: () => _showSearchModal(context),
+                        ),
+                      ],
+                    );
+                  },
                 ),
               ),
 
@@ -255,6 +285,13 @@ class DataScreenState extends State<DataScreen>
                       brandColor: _tabColors[i],
                       db: _db,
                       isScanning: _isScanning,
+                      searchQuery: _searchQuery,
+                      dateFilter: _dateFilter,
+                      showSent: _showSent,
+                      showReceived: _showReceived,
+                      showBills: _showBills,
+                      showLoad: _showLoad,
+                      selectedProviders: _selectedProviders,
                     ),
                   ),
                 ),
@@ -294,6 +331,36 @@ class DataScreenState extends State<DataScreen>
           ),
         ),
       ],
+    );
+  }
+
+  void _showSearchModal(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => _SearchFilterModal(
+        platform: _tabPlatforms[_tabController.index],
+        initialQuery: _searchQuery,
+        initialDate: _dateFilter,
+        initialSent: _showSent,
+        initialReceived: _showReceived,
+        initialBills: _showBills,
+        initialLoad: _showLoad,
+        initialProviders: _selectedProviders,
+        onApply: (query, date, sent, received, bills, load, providers) {
+          setState(() {
+            _searchQuery = query;
+            _dateFilter = date;
+            _showSent = sent;
+            _showReceived = received;
+            _showBills = bills;
+            _showLoad = load;
+            _selectedProviders = providers;
+          });
+        },
+      ),
     );
   }
 }
@@ -369,12 +436,26 @@ class _PlatformTabContent extends StatefulWidget {
   final Color brandColor;
   final IsarService db;
   final bool isScanning;
+  final String searchQuery;
+  final DateTimeRange? dateFilter;
+  final bool showSent;
+  final bool showReceived;
+  final bool showBills;
+  final bool showLoad;
+  final Set<String> selectedProviders;
 
   const _PlatformTabContent({
     required this.platform,
     required this.brandColor,
     required this.db,
     required this.isScanning,
+    required this.searchQuery,
+    this.dateFilter,
+    required this.showSent,
+    required this.showReceived,
+    required this.showBills,
+    required this.showLoad,
+    required this.selectedProviders,
   });
 
   @override
@@ -405,7 +486,75 @@ class _PlatformTabContentState extends State<_PlatformTabContent> {
         Expanded(
           child: StreamBuilder<List<TransactionRecord>>(
             stream: widget.db.listenToTransactions().map(
-              (all) => all.where((r) => r.platform == widget.platform).toList(),
+              (all) => all.where((r) {
+                if (r.platform != widget.platform) return false;
+
+                // 1. Date Filter
+                if (widget.dateFilter != null) {
+                  final start = widget.dateFilter!.start;
+                  final end = widget.dateFilter!.end;
+                  final tDate = DateTime(r.timestamp.year, r.timestamp.month, r.timestamp.day);
+                  // Ensure start and end cover the full days (end should include 23:59:59 if needed, but we check Date only)
+                  if (tDate.isBefore(start) || tDate.isAfter(end)) return false;
+                }
+
+                // 2. Search Query Filter
+                if (widget.searchQuery.isNotEmpty) {
+                  final q = widget.searchQuery.toLowerCase();
+                  bool matchQuery = false;
+                  if ((r.senderName ?? '').toLowerCase().contains(q)) matchQuery = true;
+                  if ((r.senderNumber ?? '').toLowerCase().contains(q)) matchQuery = true;
+                  if ((r.serviceProvider ?? '').toLowerCase().contains(q)) matchQuery = true;
+                  if (r.referenceNumber.toLowerCase().contains(q)) matchQuery = true;
+                  if (r.amount.toString().contains(q)) matchQuery = true;
+                  if (!matchQuery) return false;
+                }
+
+                // 3. Type / Provider Filter
+                bool isLoadRecord = r.transactionType == TransactionType.payment && 
+                                    r.senderNumber != null && 
+                                    (r.accountNumber == null || r.accountNumber!.isEmpty);
+                bool isBillRecord = r.transactionType == TransactionType.payment && !isLoadRecord;
+
+                bool typeMatch = false;
+                if (widget.showSent && (r.transactionType == TransactionType.sent || r.transactionType == TransactionType.cashOut)) typeMatch = true;
+                if (widget.showReceived && (r.transactionType == TransactionType.received || r.transactionType == TransactionType.cashIn)) typeMatch = true;
+                
+                if (widget.platform == Platform.maya) {
+                  if (widget.showLoad && isLoadRecord) typeMatch = true;
+                  if (widget.showBills && isBillRecord) typeMatch = true;
+                }
+
+                if (!typeMatch) return false;
+
+                // 4. Maya Provider Filter
+                if (widget.platform == Platform.maya && widget.selectedProviders.isNotEmpty && isBillRecord) {
+                  final sp = (r.serviceProvider ?? '').toLowerCase();
+                  bool providerMatch = false;
+                  for (final selected in widget.selectedProviders) {
+                    if (selected == 'Other detected providers') {
+                      final knownProviders = ['meralco', 'manila water', 'pldt home', 'home credit', 'tala', 'easytrip rfid'];
+                      bool matchesKnown = false;
+                      for (final known in knownProviders) {
+                        if (sp.contains(known)) {
+                          matchesKnown = true;
+                          break;
+                        }
+                      }
+                      if (!matchesKnown) {
+                        providerMatch = true;
+                        break;
+                      }
+                    } else if (sp.contains(selected.toLowerCase())) {
+                      providerMatch = true;
+                      break;
+                    }
+                  }
+                  if (!providerMatch) return false;
+                }
+
+                return true;
+              }).toList(),
             ),
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) {
@@ -889,7 +1038,7 @@ class _TransactionCardState extends State<_TransactionCard> {
   // Icon foreground colors per transaction type
   static const _typeIconColors = {
     TransactionType.sent:     Color(0xFF1976D2), // blue — money going out
-    TransactionType.received: Color(0xFF2E7D32), // green — money coming in
+    TransactionType.received: Color(0xFFD32F2F), // red — money coming in
     TransactionType.cashIn:   Color(0xFF0288D1), // light blue
     TransactionType.cashOut:  Color(0xFFF57C00), // orange
     TransactionType.payment:  Color(0xFF6A1B9A), // purple
@@ -1268,6 +1417,7 @@ class _TransactionDetailsSheetState extends State<_TransactionDetailsSheet> {
 
     _amountController.addListener(_onAmountChanged);
     _feeController.addListener(_onFeeChanged);
+    _serviceProviderController.addListener(_onServiceProviderChanged);
   }
 
   void _onFeeChanged() {
@@ -1278,6 +1428,7 @@ class _TransactionDetailsSheetState extends State<_TransactionDetailsSheet> {
   void dispose() {
     _amountController.removeListener(_onAmountChanged);
     _feeController.removeListener(_onFeeChanged);
+    _serviceProviderController.removeListener(_onServiceProviderChanged);
     _nameController.dispose();
     _accountNumberController.dispose();
     _phoneController.dispose();
@@ -1292,11 +1443,27 @@ class _TransactionDetailsSheetState extends State<_TransactionDetailsSheet> {
   }
 
   void _onAmountChanged() {
+    if (widget.record.platform == Platform.maya) return; // Maya fees don't depend on amount
+
     final amt = double.tryParse(_amountController.text.replaceAll(',', '').trim()) ?? 0.0;
     _db.calculateFeeForAmount(amt).then((fee) {
       if (mounted) {
         setState(() {
           _feeController.text = fee?.toStringAsFixed(2) ?? '0.00';
+        });
+      }
+    });
+  }
+
+  void _onServiceProviderChanged() {
+    if (widget.record.platform != Platform.maya) return;
+    
+    _db.calculateMayaFee(
+      serviceProvider: _serviceProviderController.text.trim(),
+    ).then((fee) {
+      if (mounted && fee != null && fee > 0) {
+        setState(() {
+          _feeController.text = fee.toStringAsFixed(2);
         });
       }
     });
@@ -1978,10 +2145,15 @@ class _ConfirmEntrySheetState extends State<_ConfirmEntrySheet> {
 
     _amountController.addListener(_onAmountChanged);
     _feeController.addListener(_onFeeChanged);
+    _serviceProviderController.addListener(_onServiceProviderChanged);
     
-    // Trigger initial calculation if amount is populated but fee is not
-    if (r.amount != null && r.fee == null) {
-      _onAmountChanged();
+    // Trigger initial calculation if fee is not populated
+    if (r.fee == null) {
+      if (r.platform == Platform.maya) {
+        _onServiceProviderChanged();
+      } else if (r.amount != null) {
+        _onAmountChanged();
+      }
     }
   }
 
@@ -1993,6 +2165,7 @@ class _ConfirmEntrySheetState extends State<_ConfirmEntrySheet> {
   void dispose() {
     _amountController.removeListener(_onAmountChanged);
     _feeController.removeListener(_onFeeChanged);
+    _serviceProviderController.removeListener(_onServiceProviderChanged);
     _nameController.dispose();
     _accountNumberController.dispose();
     _phoneController.dispose();
@@ -2006,11 +2179,28 @@ class _ConfirmEntrySheetState extends State<_ConfirmEntrySheet> {
   }
 
   void _onAmountChanged() {
+    if (widget.receipt.platform == Platform.maya) return; // Maya fees don't depend on amount
+
     final amt = double.tryParse(_amountController.text.replaceAll(',', '').trim()) ?? 0.0;
     _db.calculateFeeForAmount(amt).then((fee) {
       if (mounted) {
         setState(() {
           _feeController.text = fee?.toStringAsFixed(2) ?? '0.00';
+        });
+      }
+    });
+  }
+
+  void _onServiceProviderChanged() {
+    if (widget.receipt.platform != Platform.maya) return;
+    
+    _db.calculateMayaFee(
+      serviceProvider: _serviceProviderController.text.trim(),
+      rawText: widget.receipt.rawText,
+    ).then((fee) {
+      if (mounted && fee != null && fee > 0) {
+        setState(() {
+          _feeController.text = fee.toStringAsFixed(2);
         });
       }
     });
@@ -2498,7 +2688,6 @@ class _TransactionTypeSelector extends StatelessWidget {
   final ValueChanged<TransactionType> onChanged;
 
   const _TransactionTypeSelector({
-    super.key,
     required this.platform,
     required this.selectedType,
     required this.onChanged,
@@ -2550,9 +2739,9 @@ class _TransactionTypeSelector extends StatelessWidget {
 
     Color getSelectedColor(TransactionType type) {
       if (type == TransactionType.received || type == TransactionType.cashIn) {
-        return const Color(0xFF2E7D32);
+        return const Color(0xFFD32F2F);
       } else if (type == TransactionType.payment) {
-        return const Color(0xFFE65100);
+        return const Color(0xFF6A1B9A);
       }
       return const Color(0xFF1976D2);
     }
@@ -2576,6 +2765,312 @@ class _TransactionTypeSelector extends StatelessWidget {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// _SearchFilterModal
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _SearchFilterModal extends StatefulWidget {
+  final Platform platform;
+  final String initialQuery;
+  final DateTimeRange? initialDate;
+  final bool initialSent;
+  final bool initialReceived;
+  final bool initialBills;
+  final bool initialLoad;
+  final Set<String> initialProviders;
+  final Function(String, DateTimeRange?, bool, bool, bool, bool, Set<String>) onApply;
+
+  const _SearchFilterModal({
+    required this.platform,
+    required this.initialQuery,
+    required this.initialDate,
+    required this.initialSent,
+    required this.initialReceived,
+    required this.initialBills,
+    required this.initialLoad,
+    required this.initialProviders,
+    required this.onApply,
+  });
+
+  @override
+  State<_SearchFilterModal> createState() => _SearchFilterModalState();
+}
+
+class _SearchFilterModalState extends State<_SearchFilterModal> {
+  late TextEditingController _searchController;
+  DateTimeRange? _dateFilter;
+  late bool _showSent;
+  late bool _showReceived;
+  late bool _showBills;
+  late bool _showLoad;
+  late Set<String> _selectedProviders;
+
+  static const _mayaProviders = [
+    'Meralco',
+    'Manila Water',
+    'PLDT Home',
+    'Home Credit',
+    'Tala',
+    'Easytrip RFID',
+    'Other detected providers',
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _searchController = TextEditingController(text: widget.initialQuery);
+    _dateFilter = widget.initialDate;
+    _showSent = widget.initialSent;
+    _showReceived = widget.initialReceived;
+    _showBills = widget.initialBills;
+    _showLoad = widget.initialLoad;
+    _selectedProviders = Set.from(widget.initialProviders);
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  void _apply() {
+    widget.onApply(
+      _searchController.text.trim(),
+      _dateFilter,
+      _showSent,
+      _showReceived,
+      _showBills,
+      _showLoad,
+      _selectedProviders,
+    );
+    Navigator.pop(context);
+  }
+
+  void _clear() {
+    setState(() {
+      _searchController.clear();
+      _dateFilter = null;
+      _showSent = true;
+      _showReceived = true;
+      _showBills = true;
+      _showLoad = true;
+      _selectedProviders.clear();
+    });
+  }
+
+  Future<void> _pickDateRange() async {
+    final picked = await showDateRangePicker(
+      context: context,
+      initialDateRange: _dateFilter,
+      firstDate: DateTime(2000),
+      lastDate: DateTime(2100),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: Theme.of(context).colorScheme.copyWith(
+              primary: widget.platform == Platform.maya ? AppColors.maya : AppColors.gcash,
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+    if (picked != null) {
+      setState(() => _dateFilter = picked);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final brandColor = widget.platform == Platform.maya ? AppColors.maya : AppColors.gcash;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: theme.scaffoldBackgroundColor,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      padding: EdgeInsets.fromLTRB(
+        24, 
+        16, 
+        24, 
+        MediaQuery.of(context).viewInsets.bottom + MediaQuery.of(context).padding.bottom + 24
+      ),
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // Handle bar
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: 24),
+                decoration: BoxDecoration(
+                  color: isDark ? Colors.white24 : Colors.black26,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Search & Filter',
+                  style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+                ),
+                TextButton(
+                  onPressed: _clear,
+                  child: const Text('Clear All'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            
+            // Search Bar
+            TextField(
+              controller: _searchController,
+              decoration: InputDecoration(
+                hintText: 'Search names, ref numbers, contact numbers...',
+                prefixIcon: const Icon(Icons.search_rounded),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: BorderSide(color: isDark ? Colors.white24 : Colors.black12),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: BorderSide(color: isDark ? Colors.white24 : Colors.black12),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: BorderSide(color: brandColor, width: 2),
+                ),
+                contentPadding: const EdgeInsets.symmetric(vertical: 14),
+              ),
+            ),
+            const SizedBox(height: 24),
+
+            // Date Range
+            Text('Date Range', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+            const SizedBox(height: 8),
+            InkWell(
+              onTap: _pickDateRange,
+              borderRadius: BorderRadius.circular(12),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                decoration: BoxDecoration(
+                  border: Border.all(color: isDark ? Colors.white24 : Colors.black12),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.calendar_today_rounded, size: 20, color: brandColor),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        _dateFilter == null
+                            ? 'Any Date'
+                            : '${DateFormat('MMM d, yyyy').format(_dateFilter!.start)} - ${DateFormat('MMM d, yyyy').format(_dateFilter!.end)}',
+                        style: theme.textTheme.bodyLarge,
+                      ),
+                    ),
+                    if (_dateFilter != null)
+                      IconButton(
+                        icon: const Icon(Icons.close_rounded, size: 20),
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
+                        onPressed: () => setState(() => _dateFilter = null),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 24),
+
+            // Transaction Types
+            Text('Transaction Types', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                _buildFilterChip('Sent', _showSent, (v) => setState(() => _showSent = v), brandColor),
+                _buildFilterChip('Received', _showReceived, (v) => setState(() => _showReceived = v), brandColor),
+                if (widget.platform == Platform.maya) ...[
+                  _buildFilterChip('Bills', _showBills, (v) => setState(() => _showBills = v), brandColor),
+                  _buildFilterChip('Load', _showLoad, (v) => setState(() => _showLoad = v), brandColor),
+                ]
+              ],
+            ),
+            
+            if (widget.platform == Platform.maya) ...[
+              const SizedBox(height: 24),
+              Text('Service Providers', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: _mayaProviders.map((p) {
+                  final isSelected = _selectedProviders.contains(p);
+                  return _buildFilterChip(p, isSelected, (v) {
+                    setState(() {
+                      if (v) {
+                        _selectedProviders.add(p);
+                      } else {
+                        _selectedProviders.remove(p);
+                      }
+                    });
+                  }, brandColor);
+                }).toList(),
+              ),
+            ],
+
+            const SizedBox(height: 32),
+            ElevatedButton(
+              onPressed: _apply,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: brandColor,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                elevation: 0,
+              ),
+              child: const Text('Apply Filters', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFilterChip(String label, bool selected, ValueChanged<bool> onSelected, Color activeColor) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    
+    return FilterChip(
+      label: Text(label),
+      selected: selected,
+      onSelected: onSelected,
+      checkmarkColor: Colors.white,
+      selectedColor: activeColor,
+      labelStyle: TextStyle(
+        color: selected ? Colors.white : (isDark ? Colors.white70 : Colors.black87),
+        fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
+      ),
+      backgroundColor: isDark ? Colors.white10 : Colors.black.withValues(alpha: 0.05),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(20),
+        side: BorderSide(
+          color: selected ? activeColor : (isDark ? Colors.white24 : Colors.black12),
         ),
       ),
     );

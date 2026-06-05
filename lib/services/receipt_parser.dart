@@ -66,6 +66,61 @@ class ParsedReceipt {
 
 /// Parses raw receipt text (from OCR or clipboard) into a [ParsedReceipt].
 class ReceiptParser {
+  // ── Service Provider Normalization ─────────────────────────────────────
+
+  /// Known Maya service providers mapped to their proper display format.
+  /// Keys are lowercase for case-insensitive matching.
+  static const _providerDisplayNames = <String, String>{
+    'meralco': 'Meralco',
+    'manila water': 'Manila Water',
+    'pldt home': 'PLDT Home',
+    'home credit': 'Home Credit',
+    'converge': 'Converge',
+    'easytrip rfid': 'Easytrip RFID',
+    'tala': 'Tala',
+    'maynilad': 'Maynilad',
+    'smart': 'Smart',
+    'globe': 'Globe',
+    'cignal': 'Cignal',
+    'sky cable': 'Sky Cable',
+    'sss': 'SSS',
+    'pag-ibig': 'Pag-IBIG',
+    'philhealth': 'PhilHealth',
+  };
+
+  /// Normalizes a service provider name to its proper display format.
+  /// Falls back to smart title-casing for unknown providers.
+  static String normalizeProvider(String raw) {
+    final lower = raw.trim().toLowerCase();
+
+    // 1. Exact match in known providers
+    if (_providerDisplayNames.containsKey(lower)) {
+      return _providerDisplayNames[lower]!;
+    }
+
+    // 2. Partial/contains match for known providers
+    for (final entry in _providerDisplayNames.entries) {
+      if (lower.contains(entry.key) || entry.key.contains(lower)) {
+        return entry.value;
+      }
+    }
+
+    // 3. Smart title case for unknown providers
+    return _smartTitleCase(raw.trim());
+  }
+
+  /// Common acronyms that should stay uppercase during title-casing.
+  static const _acronyms = {'rfid', 'pldt', 'sss', 'nbi', 'lto', 'nso', 'psa'};
+
+  static String _smartTitleCase(String input) {
+    return input.split(RegExp(r'\s+')).map((word) {
+      final lower = word.toLowerCase();
+      if (_acronyms.contains(lower)) return word.toUpperCase();
+      if (word.isEmpty) return word;
+      return '${word[0].toUpperCase()}${word.substring(1).toLowerCase()}';
+    }).join(' ');
+  }
+
   // ── Platform detection ──────────────────────────────────────────────────
   static Platform _detectPlatform(String text, {Platform? hint}) {
     final lower = text.toLowerCase();
@@ -74,7 +129,10 @@ class ReceiptParser {
     
     // Check for Maya-specific formatting patterns
     if (lower.contains('and biller convenience fee') || 
+        lower.contains('biller convenience fee') ||
         lower.contains('sold allnet') ||
+        lower.contains('with account number') ||
+        RegExp(r'\d{2}(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\s+\d{2}:\d{2}', caseSensitive: false).hasMatch(lower) ||
         RegExp(r'\d{2}\s+[a-z]{3}\s+\d{4}\s+\d{2}:\d{2}\s+[am|pm]+:', caseSensitive: false).hasMatch(lower)) {
       return Platform.maya;
     }
@@ -88,18 +146,22 @@ class ReceiptParser {
   static TransactionType _detectType(String text) {
     final lower = text.toLowerCase();
     
-    // Explicitly check for received patterns
+    // Explicitly check for received patterns (Maya + GCash)
     if (lower.contains('you have received') ||
         lower.contains('you received') ||
         lower.contains('money received') ||
         lower.contains('received php') ||
-        lower.contains('received from')) {
+        lower.contains('received from') ||
+        RegExp(r'received\s*₱', caseSensitive: false).hasMatch(lower) ||
+        RegExp(r'received\s+(?:₱|php|p)\s*[0-9]', caseSensitive: false).hasMatch(lower)) {
       return TransactionType.received;
     }
     
-    // Explicitly check for sent patterns
+    // Explicitly check for sent patterns (Maya + GCash)
     if (lower.contains('you have sent') ||
-        lower.contains('successfully sent')) {
+        lower.contains('successfully sent') ||
+        RegExp(r'sent\s*₱', caseSensitive: false).hasMatch(lower) ||
+        RegExp(r'sent\s+(?:₱|php|p)\s*[0-9]', caseSensitive: false).hasMatch(lower)) {
       return TransactionType.sent;
     }
 
@@ -112,8 +174,11 @@ class ReceiptParser {
       return TransactionType.cashOut;
     }
     
-    // Maya specific payment patterns
+    // Maya specific payment patterns — must come before generic 'pay' checks
     if (lower.contains('paid php') || 
+        lower.contains('biller convenience fee') ||
+        lower.contains('with account number') ||
+        RegExp(r'paid\s*₱', caseSensitive: false).hasMatch(lower) ||
         lower.contains('sold ')) {
       return TransactionType.payment;
     }
@@ -135,6 +200,33 @@ class ReceiptParser {
 
   // ── Amount extraction ────────────────────────────────────────────────────
   static double? _extractAmount(String text) {
+    // Maya Pay Bills Format: Paid ₱6,420.00 and biller convenience fee...
+    final paidPesoMatch = RegExp(
+      r'Paid\s*(?:₱|PHP|Php|P)\s*([0-9,]+\.[0-9]{2})',
+      caseSensitive: false,
+    ).firstMatch(text);
+    if (paidPesoMatch != null) {
+      return _parseAmount(paidPesoMatch.group(1)!);
+    }
+
+    // Maya Sent Format: Sent ₱500.00 to...
+    final sentPesoMatch = RegExp(
+      r'Sent\s*(?:₱|PHP|Php|P)\s*([0-9,]+\.[0-9]{2})',
+      caseSensitive: false,
+    ).firstMatch(text);
+    if (sentPesoMatch != null) {
+      return _parseAmount(sentPesoMatch.group(1)!);
+    }
+
+    // Maya Received Format: Received ₱1,000.00 from...
+    final receivedPesoMatch = RegExp(
+      r'Received\s*(?:₱|PHP|Php|P)\s*([0-9,]+\.[0-9]{2})',
+      caseSensitive: false,
+    ).firstMatch(text);
+    if (receivedPesoMatch != null) {
+      return _parseAmount(receivedPesoMatch.group(1)!);
+    }
+
     // Maya Load Format: Sold ALLNET w/ FREE Landline 599 to +63...
     // Extract the amount directly from the promo name and round up if it ends in 9
     final loadMatch = RegExp(r'Sold\s+[\s\S]+?\s+(\d+)\s+to\s+(?:(?:\+?63|0)9)', caseSensitive: false).firstMatch(text);
@@ -301,10 +393,29 @@ class ReceiptParser {
     }
 
     // 2. Maya-specific patterns (Sent to / Paid to / Sold to)
+    //    For pay bills, stop before "with Account Number" to avoid polluting the name field
     if (rawName == null) {
-      final paidTo = RegExp(r'paid(?:.*?)\s+to\s+([A-Za-z0-9\s]+?)(?:\.|Convenience|\n|$)', caseSensitive: false).firstMatch(text);
+      final paidTo = RegExp(r'paid(?:.*?)\s+to\s+([A-Za-z0-9\s]+?)(?:\s+with\s+Account|\.|Convenience|\n|$)', caseSensitive: false).firstMatch(text);
       if (paidTo != null) {
-        rawName = paidTo.group(1)?.trim();
+        final candidate = paidTo.group(1)?.trim();
+        // Don't use as name if it's a known service provider (it'll go to serviceProvider field)
+        if (candidate != null && !_isKnownProvider(candidate)) {
+          rawName = candidate;
+        }
+      }
+    }
+    // Maya sent: "Sent ₱500.00 to JUAN D." — extract person name after "to"
+    if (rawName == null) {
+      final sentTo = RegExp(r'Sent\s*(?:₱|PHP|P)?[0-9,.]+\s+to\s+([A-Za-z][A-Za-z *\.•●·\-]{2,40})', caseSensitive: false).firstMatch(text);
+      if (sentTo != null) {
+        rawName = sentTo.group(1)?.trim();
+      }
+    }
+    // Maya received: "Received ₱1,000.00 from MARIA C."
+    if (rawName == null) {
+      final receivedFrom = RegExp(r'Received\s*(?:₱|PHP|P)?[0-9,.]+\s+from\s+([A-Za-z][A-Za-z *\.•●·\-]{2,40})', caseSensitive: false).firstMatch(text);
+      if (receivedFrom != null) {
+        rawName = receivedFrom.group(1)?.trim();
       }
     }
     if (rawName == null) {
@@ -388,26 +499,64 @@ class ReceiptParser {
 
   // ── Service Provider extraction ───────────────────────────────────────────
   static String? _extractServiceProvider(String text) {
+    // Maya bills format: Paid ... to PROVIDER with Account Number ...
+    final paidWithAcct = RegExp(
+      r'to\s+([A-Za-z0-9\s]+?)\s+with\s+Account\s+Number',
+      caseSensitive: false,
+    ).firstMatch(text);
+    if (paidWithAcct != null) {
+      final raw = paidWithAcct.group(1)!.trim();
+      if (raw.isNotEmpty) return normalizeProvider(raw);
+    }
+
     // Pay bills format: Paid ... to [Provider]. Your...
     // Use (?s) or \s+ to handle newlines between 'to' and the provider name
     final paidMatch = RegExp(r'Paid[\s\S]*? to (.+?)\.\s*Your', caseSensitive: false).firstMatch(text);
     if (paidMatch != null) {
-      final match = paidMatch.group(1)?.replaceAll('\n', ' ')?.trim();
+      final match = paidMatch.group(1)?.replaceAll('\n', ' ').trim();
       if (match != null && !RegExp(r'^\+?\d+$').hasMatch(match.replaceAll(RegExp(r'[ \-]'), ''))) {
-        return match;
+        return normalizeProvider(match);
       }
     }
     
     // Load format: Sold [Provider/Promo] to +63...
     final soldMatch = RegExp(r'Sold ([\s\S]+?) to \s*(?:(?:\+?63|0)9)', caseSensitive: false).firstMatch(text);
     if (soldMatch != null) {
-      return soldMatch.group(1)?.replaceAll('\n', ' ')?.trim();
+      return soldMatch.group(1)?.replaceAll('\n', ' ').trim();
     }
     
     return null;
   }
 
+  /// Returns true if the given text matches a known service provider.
+  static bool _isKnownProvider(String text) {
+    final lower = text.trim().toLowerCase();
+    for (final key in _providerDisplayNames.keys) {
+      if (lower == key || lower.contains(key) || key.contains(lower)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  // ── Account Number extraction ─────────────────────────────────────────────
+  static String? _extractAccountNumber(String text) {
+    // Maya format: "with Account Number ******9151"
+    final match = RegExp(
+      r'(?:Account\s*(?:No\.?|Number|#))\s*[:\s]?\s*([*\d][*\d\s-]+[\d*])',
+      caseSensitive: false,
+    ).firstMatch(text);
+    return match?.group(1)?.trim();
+  }
+
   // ── Date/time extraction ─────────────────────────────────────────────────
+
+  // Maya compact format: 05Jun 08:32: (DDMon HH:MM — no year, infer current year)
+  static final _mayaCompactDateRe = RegExp(
+    r'(\d{2})(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{2}):(\d{2}):?',
+    caseSensitive: false,
+  );
+
   static final _gcashDateRe = RegExp(
     r'(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)'
     r'[\s.]+(\d{1,2})[,\s]+(\d{4})'
@@ -431,6 +580,22 @@ class ReceiptParser {
   );
 
   static DateTime? _extractDate(String text) {
+    // Maya compact format: 05Jun 08:32: — infer current year
+    final mayaCompact = _mayaCompactDateRe.firstMatch(text);
+    if (mayaCompact != null) {
+      try {
+        final day = int.parse(mayaCompact.group(1)!);
+        final monthStr = mayaCompact.group(2)!;
+        final hour = int.parse(mayaCompact.group(3)!);
+        final minute = int.parse(mayaCompact.group(4)!);
+        final monthIndex = _monthFromAbbr(monthStr);
+        if (monthIndex != null) {
+          final now = DateTime.now();
+          return DateTime(now.year, monthIndex, day, hour, minute);
+        }
+      } catch (_) {}
+    }
+
     final gcash = _gcashDateRe.firstMatch(text);
     if (gcash != null) {
       try {
@@ -495,6 +660,16 @@ class ReceiptParser {
     return null;
   }
 
+  /// Helper: converts 3-letter month abbreviation to month number (1-12).
+  static int? _monthFromAbbr(String abbr) {
+    const months = {
+      'jan': 1, 'feb': 2, 'mar': 3, 'apr': 4,
+      'may': 5, 'jun': 6, 'jul': 7, 'aug': 8,
+      'sep': 9, 'oct': 10, 'nov': 11, 'dec': 12,
+    };
+    return months[abbr.toLowerCase()];
+  }
+
   // ── Public API ───────────────────────────────────────────────────────────
   static ParsedReceipt parse(String rawText, {Platform? platformHint}) {
     final platform        = _detectPlatform(rawText, hint: platformHint);
@@ -503,10 +678,13 @@ class ReceiptParser {
     final referenceNumber = _extractReference(rawText);
     final phoneNumber     = _extractPhone(rawText);
     final serviceProvider = _extractServiceProvider(rawText);
+    final accountNumber   = _extractAccountNumber(rawText);
     final personName      = _extractName(rawText, phoneNumber, serviceProvider);
     final transactionDate = _extractDate(rawText);
     final remainingBalance = _extractBalance(rawText);
-    final fee             = _extractFee(rawText);
+    // For Maya platform, skip the biller convenience fee from text —
+    // BayadTrack uses its own configurable fee system from Settings.
+    final fee = platform == Platform.maya ? null : _extractFee(rawText);
 
     return ParsedReceipt(
       rawText:          rawText,
@@ -520,7 +698,7 @@ class ReceiptParser {
       remainingBalance: remainingBalance,
       fee:              fee,
       serviceProvider:  serviceProvider,
-      accountNumber:    null, // Not parsed yet
+      accountNumber:    accountNumber,
     );
   }
 

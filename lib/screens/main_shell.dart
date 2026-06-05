@@ -5,7 +5,7 @@ import 'package:flutter_sharing_intent/flutter_sharing_intent.dart';
 import 'package:flutter_sharing_intent/model/sharing_file.dart';
 import 'home_screen.dart';
 import 'data_screen.dart';
-import 'printer_screen.dart';
+import 'credit_screen.dart';
 import 'settings_screen.dart';
 import '../services/app_dialog.dart';
 
@@ -141,19 +141,9 @@ class _MainShellState extends State<MainShell> {
   StreamSubscription<List<SharedFile>>? _sharingSubscription;
 
   // The four main screens — order matches the navigation bar destinations below
-  late final List<Widget> _screens;
-
   @override
   void initState() {
     super.initState();
-
-    _screens = [
-      const HomeScreen(),
-      DataScreen(key: _dataScreenKey),
-      const PrinterScreen(),
-      const SettingsScreen(),
-    ];
-
     _initSharingIntent();
   }
 
@@ -214,6 +204,13 @@ class _MainShellState extends State<MainShell> {
 
   @override
   Widget build(BuildContext context) {
+    final screens = [
+      const HomeScreen(),
+      DataScreen(key: _dataScreenKey),
+      const CreditScreen(),
+      const SettingsScreen(),
+    ];
+
     return PopScope<Object?>(
       // Never let the system auto-pop; we intercept and show a dialog instead.
       canPop: false,
@@ -231,7 +228,7 @@ class _MainShellState extends State<MainShell> {
           Positioned.fill(
             child: _TabTransitionSwitcher(
               selectedIndex: _selectedIndex,
-              children: _screens,
+              children: screens,
             ),
           ),
           Positioned(
@@ -275,9 +272,9 @@ class _MainShellState extends State<MainShell> {
                           label: 'Data',
                         ),
                         NavigationDestination(
-                          icon: Icon(Icons.print_outlined),
-                          selectedIcon: Icon(Icons.print_rounded),
-                          label: 'Printer',
+                          icon: Icon(Icons.handshake_outlined),
+                          selectedIcon: Icon(Icons.handshake_rounded),
+                          label: 'Credit',
                         ),
                         NavigationDestination(
                           icon: Icon(Icons.settings_outlined),

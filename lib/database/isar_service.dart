@@ -246,7 +246,7 @@ class IsarService {
   Future<void> saveFromParsedReceipt(ParsedReceipt receipt, {double? manualFee}) async {
     double? calculatedFee;
     if (receipt.platform == Platform.maya) {
-      calculatedFee = await calculateMayaFee(receipt);
+      calculatedFee = await calculateMayaFee(serviceProvider: receipt.serviceProvider, rawText: receipt.rawText);
     } else {
       calculatedFee = await calculateFeeForAmount(receipt.amount ?? 0.0);
     }
@@ -266,7 +266,7 @@ class IsarService {
   }
 
   /// Calculates the service fee for Maya Business transactions based on user-defined settings
-  Future<double?> calculateMayaFee(ParsedReceipt receipt) async {
+  Future<double?> calculateMayaFee({String? serviceProvider, String? rawText}) async {
     final prefs = await SharedPreferences.getInstance();
     
     // Load the Maya fees map. If it doesn't exist, create default.
@@ -288,16 +288,17 @@ class IsarService {
       await prefs.setString('maya_service_fees', jsonEncode(feesMap));
     }
     
-    final lowerText = receipt.rawText.toLowerCase();
-    
-    // Check if it's a load transaction
-    if (lowerText.contains('sold ') && lowerText.contains(' to ')) {
-       return (feesMap['Load'] as num?)?.toDouble() ?? 5.0;
+    if (rawText != null) {
+      final lowerText = rawText.toLowerCase();
+      // Check if it's a load transaction
+      if (lowerText.contains('sold ') && lowerText.contains(' to ')) {
+         return (feesMap['Load'] as num?)?.toDouble() ?? 5.0;
+      }
     }
     
     // For bills payment
-    final sp = receipt.serviceProvider?.toLowerCase();
-    if (sp != null) {
+    final sp = serviceProvider?.toLowerCase();
+    if (sp != null && sp.isNotEmpty) {
        for (final key in feesMap.keys) {
          if (key == 'Load') continue;
          if (sp.contains(key.toLowerCase()) || key.toLowerCase().contains(sp)) {
