@@ -36,7 +36,7 @@ class _MayaFeeSettingsScreenState extends State<MayaFeeSettingsScreen> {
         'Home Credit': 25.0,
         'Converge': 25.0,
         'TALA': 25.0,
-        'RFID': 25.0,
+        'Easytrip RFID': 25.0,
         'Load': 5.0,
       };
       await prefs.setString('maya_service_fees', jsonEncode(_feesMap));

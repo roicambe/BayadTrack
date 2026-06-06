@@ -226,6 +226,33 @@ class IsarService {
   }
 
   // ─────────────────────────────────────────────
+  // DUPLICATE REFERENCE CHECK
+  // ─────────────────────────────────────────────
+
+  /// Normalizes a reference number for duplicate detection.
+  /// Removes all whitespace and converts to uppercase so that
+  /// "ABC 123", "abc123", and "ABC123" are treated as identical.
+  static String _normalizeRef(String ref) =>
+      ref.replaceAll(RegExp(r'\s+'), '').toUpperCase();
+
+  /// Returns the first existing [TransactionRecord] whose normalized
+  /// reference number matches [refNumber], or null if none exists.
+  /// Ignores 'UNKNOWN' placeholders so they never block a save.
+  Future<TransactionRecord?> findDuplicateReference(String refNumber) async {
+    final normalized = _normalizeRef(refNumber);
+    if (normalized.isEmpty || normalized.startsWith('UNKNOWN')) return null;
+
+    final isar = await db;
+    final all = await isar.transactionRecords.where().findAll();
+    for (final record in all) {
+      if (_normalizeRef(record.referenceNumber) == normalized) {
+        return record;
+      }
+    }
+    return null;
+  }
+
+  // ─────────────────────────────────────────────
   // DELETE ALL
   // ─────────────────────────────────────────────
 
@@ -255,10 +282,11 @@ class IsarService {
       ..platform         = receipt.platform
       ..transactionType  = receipt.transactionType
       ..amount           = receipt.amount ?? 0.0
-      ..referenceNumber  = receipt.referenceNumber ?? 'UNKNOWN'
+      ..referenceNumber  = receipt.referenceNumber ?? 'UNKNOWN-${DateTime.now().millisecondsSinceEpoch}'
       ..timestamp        = receipt.transactionDate ?? DateTime.now()
       ..senderName       = receipt.personName
       ..senderNumber     = receipt.phoneNumber
+      ..accountNumber    = receipt.accountNumber
       ..serviceProvider  = receipt.serviceProvider
       ..remainingBalance = receipt.remainingBalance
       ..fee              = manualFee ?? calculatedFee ?? 0.0;
@@ -282,7 +310,7 @@ class IsarService {
         'Home Credit': 25.0,
         'Converge': 25.0,
         'TALA': 25.0,
-        'RFID': 25.0,
+        'Easytrip RFID': 25.0,
         'Load': 5.0,
       };
       await prefs.setString('maya_service_fees', jsonEncode(feesMap));

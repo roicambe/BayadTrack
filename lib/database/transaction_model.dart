@@ -40,6 +40,7 @@ class TransactionRecord {
   late double amount;
 
   /// Unique reference number from the receipt
+  @Index(unique: true)
   late String referenceNumber;
 
   /// When the transaction happened

@@ -96,6 +96,19 @@ const TransactionRecordSchema = CollectionSchema(
   deserializeProp: _transactionRecordDeserializeProp,
   idName: r'id',
   indexes: {
+    r'referenceNumber': IndexSchema(
+      id: -1505394869653403563,
+      name: r'referenceNumber',
+      unique: true,
+      replace: false,
+      properties: [
+        IndexPropertySchema(
+          name: r'referenceNumber',
+          type: IndexType.hash,
+          caseSensitive: true,
+        )
+      ],
+    ),
     r'senderNumber': IndexSchema(
       id: -6822599329568614336,
       name: r'senderNumber',
@@ -298,6 +311,64 @@ void _transactionRecordAttach(
   object.id = id;
 }
 
+extension TransactionRecordByIndex on IsarCollection<TransactionRecord> {
+  Future<TransactionRecord?> getByReferenceNumber(String referenceNumber) {
+    return getByIndex(r'referenceNumber', [referenceNumber]);
+  }
+
+  TransactionRecord? getByReferenceNumberSync(String referenceNumber) {
+    return getByIndexSync(r'referenceNumber', [referenceNumber]);
+  }
+
+  Future<bool> deleteByReferenceNumber(String referenceNumber) {
+    return deleteByIndex(r'referenceNumber', [referenceNumber]);
+  }
+
+  bool deleteByReferenceNumberSync(String referenceNumber) {
+    return deleteByIndexSync(r'referenceNumber', [referenceNumber]);
+  }
+
+  Future<List<TransactionRecord?>> getAllByReferenceNumber(
+      List<String> referenceNumberValues) {
+    final values = referenceNumberValues.map((e) => [e]).toList();
+    return getAllByIndex(r'referenceNumber', values);
+  }
+
+  List<TransactionRecord?> getAllByReferenceNumberSync(
+      List<String> referenceNumberValues) {
+    final values = referenceNumberValues.map((e) => [e]).toList();
+    return getAllByIndexSync(r'referenceNumber', values);
+  }
+
+  Future<int> deleteAllByReferenceNumber(List<String> referenceNumberValues) {
+    final values = referenceNumberValues.map((e) => [e]).toList();
+    return deleteAllByIndex(r'referenceNumber', values);
+  }
+
+  int deleteAllByReferenceNumberSync(List<String> referenceNumberValues) {
+    final values = referenceNumberValues.map((e) => [e]).toList();
+    return deleteAllByIndexSync(r'referenceNumber', values);
+  }
+
+  Future<Id> putByReferenceNumber(TransactionRecord object) {
+    return putByIndex(r'referenceNumber', object);
+  }
+
+  Id putByReferenceNumberSync(TransactionRecord object,
+      {bool saveLinks = true}) {
+    return putByIndexSync(r'referenceNumber', object, saveLinks: saveLinks);
+  }
+
+  Future<List<Id>> putAllByReferenceNumber(List<TransactionRecord> objects) {
+    return putAllByIndex(r'referenceNumber', objects);
+  }
+
+  List<Id> putAllByReferenceNumberSync(List<TransactionRecord> objects,
+      {bool saveLinks = true}) {
+    return putAllByIndexSync(r'referenceNumber', objects, saveLinks: saveLinks);
+  }
+}
+
 extension TransactionRecordQueryWhereSort
     on QueryBuilder<TransactionRecord, TransactionRecord, QWhere> {
   QueryBuilder<TransactionRecord, TransactionRecord, QAfterWhere> anyId() {
@@ -374,6 +445,51 @@ extension TransactionRecordQueryWhere
         upper: upperId,
         includeUpper: includeUpper,
       ));
+    });
+  }
+
+  QueryBuilder<TransactionRecord, TransactionRecord, QAfterWhereClause>
+      referenceNumberEqualTo(String referenceNumber) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.equalTo(
+        indexName: r'referenceNumber',
+        value: [referenceNumber],
+      ));
+    });
+  }
+
+  QueryBuilder<TransactionRecord, TransactionRecord, QAfterWhereClause>
+      referenceNumberNotEqualTo(String referenceNumber) {
+    return QueryBuilder.apply(this, (query) {
+      if (query.whereSort == Sort.asc) {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'referenceNumber',
+              lower: [],
+              upper: [referenceNumber],
+              includeUpper: false,
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'referenceNumber',
+              lower: [referenceNumber],
+              includeLower: false,
+              upper: [],
+            ));
+      } else {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'referenceNumber',
+              lower: [referenceNumber],
+              includeLower: false,
+              upper: [],
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'referenceNumber',
+              lower: [],
+              upper: [referenceNumber],
+              includeUpper: false,
+            ));
+      }
     });
   }
 

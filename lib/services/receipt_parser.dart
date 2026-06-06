@@ -702,19 +702,29 @@ class ReceiptParser {
     );
   }
 
-  /// Parses a batch of text. 
-  /// If it detects a Maya batch (or is explicitly told to expect Maya), it splits by new lines.
-  /// Otherwise, it assumes a standard single GCash receipt block.
+  /// Parses a batch of text.
+  /// For Maya text, first tries parsing the full text as a single receipt.
+  /// If that produces a usable result, returns it directly (prevents a valid
+  /// multi-line receipt from being split into partial single-line fragments).
+  /// Only falls back to line-by-line splitting for truly tabular/batch data
+  /// where the full text is not itself a parseable receipt.
   static List<ParsedReceipt> parseBatch(String rawText, {Platform? platformHint}) {
     final platform = _detectPlatform(rawText, hint: platformHint);
-    
-    // Maya uses line-by-line batch format
+
+    // Maya: try full-text parse first before splitting by lines.
+    // A real share from the Maya app is one multi-line receipt — splitting
+    // it produces many partial fragments that trigger the multi-transaction error.
     if (platform == Platform.maya) {
+      final fullParse = parse(rawText, platformHint: platformHint);
+      if (fullParse.isUsable) {
+        return [fullParse];
+      }
+
+      // Full text wasn't a parseable receipt — fall back to line-by-line splitting
+      // for tabular/batch formats (e.g. exported CSV-like lists).
       final lines = rawText.split('\n').map((l) => l.trim()).where((l) => l.isNotEmpty).toList();
       final List<ParsedReceipt> results = [];
       for (final line in lines) {
-        // Only parse lines that look like valid transactions (containing dates or 'php' or 'paid'/'sold')
-        // We'll just run it through parse() and if it extracts anything useful (like an amount or ref), keep it.
         final parsed = parse(line, platformHint: platformHint);
         if (parsed.amount != null || parsed.referenceNumber != null || parsed.transactionDate != null) {
           results.add(parsed);
@@ -722,7 +732,7 @@ class ReceiptParser {
       }
       if (results.isNotEmpty) return results;
     }
-    
+
     // Fallback: single receipt mode
     return [parse(rawText, platformHint: platformHint)];
   }

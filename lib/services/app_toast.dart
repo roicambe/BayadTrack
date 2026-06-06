@@ -47,6 +47,72 @@ abstract final class AppToast {
     color: const Color(0xFF1565C0),
   );
 
+  /// Shows a 5-second undo snackbar after a transaction deletion.
+  /// Pass [messenger] captured **before** the details sheet is popped so
+  /// the reference stays valid after navigation.
+  /// [onUndo] is called when the user taps UNDO — caller must re-save the record.
+  static void undoDelete(
+    ScaffoldMessengerState messenger, {
+    required VoidCallback onUndo,
+  }) {
+    const bgColor = Color(0xFF323232); // neutral dark, same feel as system snackbars
+
+    messenger
+      ..clearSnackBars()
+      ..showSnackBar(
+        SnackBar(
+          behavior: SnackBarBehavior.floating,
+          margin: const EdgeInsets.fromLTRB(16, 0, 16, 105),
+          padding: const EdgeInsets.only(left: 16, right: 8, top: 4, bottom: 4),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+          ),
+          backgroundColor: bgColor,
+          duration: const Duration(seconds: 5),
+          content: Row(
+            children: [
+              const Icon(Icons.delete_outline_rounded, color: Colors.white70, size: 20),
+              const SizedBox(width: 10),
+              const Expanded(
+                child: Text(
+                  'Transaction deleted',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w500,
+                    fontSize: 14,
+                  ),
+                ),
+              ),
+              TextButton(
+                onPressed: () {
+                  messenger.hideCurrentSnackBar();
+                  onUndo();
+                },
+                style: TextButton.styleFrom(
+                  foregroundColor: Colors.amber.shade300,
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+                child: const Text(
+                  'UNDO',
+                  style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13),
+                ),
+              ),
+              IconButton(
+                onPressed: () => messenger.hideCurrentSnackBar(),
+                icon: const Icon(Icons.close_rounded, color: Colors.white54, size: 18),
+                padding: const EdgeInsets.all(6),
+                constraints: const BoxConstraints(),
+                visualDensity: VisualDensity.compact,
+                splashRadius: 18,
+              ),
+            ],
+          ),
+        ),
+      );
+  }
+
   // ── Internal renderer ──────────────────────────────────────────────────────
 
   static void _show(

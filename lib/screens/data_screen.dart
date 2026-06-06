@@ -25,6 +25,43 @@ int _tabForPlatform(Platform platform) =>
 // ─────────────────────────────────────────────────────────────────────────────
 
 /// Data tab — minimal two-platform archive with a floating + button.
+extension TransactionRecordClassification on TransactionRecord {
+  bool get isLoad {
+    if (transactionType != TransactionType.payment) return false;
+    
+    final sp = serviceProvider?.toLowerCase() ?? '';
+    
+    // Explicit load keywords
+    if (sp.contains('load') || sp.contains('allnet') || sp.contains('promo') || sp.contains('data') || sp.contains('surf')) {
+      return true;
+    }
+    
+    // Known billers
+    final knownBills = [
+      'meralco', 'water', 'pldt', 'home credit', 'tala', 'converge', 
+      'easytrip', 'rfid', 'maynilad', 'cignal', 'sky', 'sss', 'pag-ibig', 
+      'philhealth', 'electric', 'telecom'
+    ];
+    for (final bill in knownBills) {
+      if (sp.contains(bill)) return false;
+    }
+    
+    // If it has an account number, it's a bill
+    if (accountNumber != null && accountNumber!.trim().isNotEmpty) {
+      return false;
+    }
+    
+    // If it has a sender number but no account number and wasn't caught by known bills, assume Load
+    if (senderNumber != null && senderNumber!.trim().isNotEmpty) {
+      return true;
+    }
+    
+    return false;
+  }
+
+  bool get isBill => transactionType == TransactionType.payment && !isLoad;
+}
+
 class DataScreen extends StatefulWidget {
   const DataScreen({super.key});
 
@@ -145,6 +182,7 @@ class DataScreenState extends State<DataScreen>
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
+      isDismissible: false,
       builder: (ctx) => _PasteTextSheet(
         platform: platform,
         onSubmit: (text) async {
@@ -511,10 +549,8 @@ class _PlatformTabContentState extends State<_PlatformTabContent> {
                 }
 
                 // 3. Type / Provider Filter
-                bool isLoadRecord = r.transactionType == TransactionType.payment && 
-                                    r.senderNumber != null && 
-                                    (r.accountNumber == null || r.accountNumber!.isEmpty);
-                bool isBillRecord = r.transactionType == TransactionType.payment && !isLoadRecord;
+                bool isLoadRecord = r.isLoad;
+                bool isBillRecord = r.isBill;
 
                 bool typeMatch = false;
                 if (widget.showSent && (r.transactionType == TransactionType.sent || r.transactionType == TransactionType.cashOut)) typeMatch = true;
@@ -533,7 +569,7 @@ class _PlatformTabContentState extends State<_PlatformTabContent> {
                   bool providerMatch = false;
                   for (final selected in widget.selectedProviders) {
                     if (selected == 'Other detected providers') {
-                      final knownProviders = ['meralco', 'manila water', 'pldt home', 'home credit', 'tala', 'easytrip rfid'];
+                      final knownProviders = ['meralco', 'manila water', 'pldt home', 'home credit', 'tala', 'converge', 'easytrip rfid'];
                       bool matchesKnown = false;
                       for (final known in knownProviders) {
                         if (sp.contains(known)) {
@@ -1093,14 +1129,39 @@ class _TransactionCardState extends State<_TransactionCard> {
       confirmDismiss: (direction) async {
         if (direction == DismissDirection.endToStart) {
           // Swipe Left → Delete
+          final messenger = ScaffoldMessenger.of(context);
           final confirmed = await AppDialog.showDeleteConfirmation(
             context,
             title: 'Delete Transaction?',
             content: 'Are you sure you want to permanently delete this transaction record? This cannot be undone.',
           );
           if (confirmed == true) {
+            // Capture a deep copy before deletion to allow exact restoration
+            final recordCopy = TransactionRecord()
+              ..id = widget.record.id
+              ..platform = widget.record.platform
+              ..transactionType = widget.record.transactionType
+              ..amount = widget.record.amount
+              ..referenceNumber = widget.record.referenceNumber
+              ..timestamp = widget.record.timestamp
+              ..senderName = widget.record.senderName
+              ..senderNumber = widget.record.senderNumber
+              ..accountNumber = widget.record.accountNumber
+              ..remainingBalance = widget.record.remainingBalance
+              ..recordedAt = widget.record.recordedAt
+              ..notes = widget.record.notes
+              ..serviceProvider = widget.record.serviceProvider
+              ..fee = widget.record.fee
+              ..isSettled = widget.record.isSettled;
+
             await _db.deleteTransaction(widget.record.id);
-            if (context.mounted) AppToast.success(context, 'Transaction deleted!');
+
+            AppToast.undoDelete(
+              messenger,
+              onUndo: () async {
+                await _db.saveTransaction(recordCopy);
+              },
+            );
             return true;
           }
           return false;
@@ -1224,9 +1285,9 @@ class _TransactionCardState extends State<_TransactionCard> {
                             widget.record.serviceProvider!,
                             style: theme.textTheme.labelLarge?.copyWith(
                               fontWeight: FontWeight.w700,
-                              color: (widget.record.senderNumber != null && widget.record.senderNumber!.trim().isNotEmpty)
-                                  ? const Color(0xFFE91E63) // Pink for Load
-                                  : const Color(0xFF0288D1), // Blue for Pay Bills
+                              color: widget.record.isLoad
+                                  ? const Color(0xFFD32F2F) // Red for Load
+                                  : const Color(0xFF1976D2), // Blue for Pay Bills
                             ),
                             overflow: TextOverflow.ellipsis,
                             maxLines: 1,
@@ -1407,7 +1468,7 @@ class _TransactionDetailsSheetState extends State<_TransactionDetailsSheet> {
       text: DateFormat('MMM d, yyyy').format(r.timestamp),
     );
     _timeController = TextEditingController(
-      text: DateFormat('hh:mm a').format(r.timestamp),
+      text: DateFormat('hh:mm a', 'en_US').format(r.timestamp),
     );
     _refController = TextEditingController(text: r.referenceNumber);
     _balanceController = TextEditingController(
@@ -1502,7 +1563,7 @@ class _TransactionDetailsSheetState extends State<_TransactionDetailsSheet> {
   Future<void> _selectTime() async {
     TimeOfDay initial = TimeOfDay.fromDateTime(widget.record.timestamp);
     try {
-      final parsedDate = DateFormat('hh:mm a').parse(_timeController.text.trim());
+      final parsedDate = DateFormat('hh:mm a', 'en_US').parse(_timeController.text.trim());
       initial = TimeOfDay.fromDateTime(parsedDate);
     } catch (_) {}
 
@@ -1525,7 +1586,7 @@ class _TransactionDetailsSheetState extends State<_TransactionDetailsSheet> {
       setState(() {
         final now = DateTime.now();
         final dt = DateTime(now.year, now.month, now.day, picked.hour, picked.minute);
-        _timeController.text = DateFormat('hh:mm a').format(dt);
+        _timeController.text = DateFormat('hh:mm a', 'en_US').format(dt);
       });
     }
   }
@@ -1537,7 +1598,7 @@ class _TransactionDetailsSheetState extends State<_TransactionDetailsSheet> {
     try {
       final dateStr = _dateController.text.trim();
       final timeStr = _timeController.text.trim();
-      dtVal = DateFormat('MMM d, yyyy hh:mm a').parse('$dateStr $timeStr');
+      dtVal = DateFormat('MMM d, yyyy hh:mm a', 'en_US').parse('$dateStr $timeStr');
     } catch (_) {
       dtVal = widget.record.timestamp;
     }
@@ -1546,7 +1607,7 @@ class _TransactionDetailsSheetState extends State<_TransactionDetailsSheet> {
     final newAccount = _accountNumberController.text.trim().isEmpty ? null : _accountNumberController.text.trim();
     final newPhone = _phoneController.text.trim().isEmpty ? null : _phoneController.text.trim();
     final newProvider = _serviceProviderController.text.trim().isEmpty ? null : _serviceProviderController.text.trim();
-    final newRef = _refController.text.trim().isEmpty ? 'UNKNOWN' : _refController.text.trim();
+    final newRef = _refController.text.trim().isEmpty ? 'UNKNOWN-${DateTime.now().millisecondsSinceEpoch}' : _refController.text.trim();
 
     final feeVal = double.tryParse(_feeController.text.replaceAll(',', '').trim());
 
@@ -1945,13 +2006,40 @@ class _PasteTextSheetState extends State<_PasteTextSheet> {
     super.dispose();
   }
 
+  bool get _isDirty => _controller.text.trim().isNotEmpty;
+
+  Future<void> _onCancel() async {
+    if (_isDirty) {
+      final confirm = await AppDialog.showThemedDialog(
+        context,
+        title: 'Discard Changes?',
+        content: 'Are you sure you want to cancel? All entered data will be lost.',
+        confirmLabel: 'Discard',
+        cancelLabel: 'Cancel',
+        accentColor: const Color(0xFFC62828),
+        icon: Icons.warning_amber_rounded,
+      );
+      if (confirm == true && mounted) {
+        Navigator.of(context).pop();
+      }
+    } else {
+      Navigator.of(context).pop();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
 
-    return Scaffold(
-      backgroundColor: Colors.transparent,
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) async {
+        if (didPop) return;
+        await _onCancel();
+      },
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
       resizeToAvoidBottomInset: true,
       body: DraggableScrollableSheet(
         initialChildSize: 0.6,
@@ -1975,12 +2063,29 @@ class _PasteTextSheetState extends State<_PasteTextSheet> {
               ),
               const SizedBox(height: 16),
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: Text(
-                  'Paste ${_getPlatformName(widget.platform)} Text',
-                  style: theme.textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.close_rounded),
+                      onPressed: _onCancel,
+                    ),
+                    Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                        child: Text(
+                          'Paste ${_getPlatformName(widget.platform)} Text',
+                          style: theme.textTheme.titleLarge?.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 48), // Balance spacing
+                  ],
                 ),
               ),
               const SizedBox(height: 6),
@@ -2065,8 +2170,9 @@ class _PasteTextSheetState extends State<_PasteTextSheet> {
           ),
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 }
 
 class _ConfirmEntrySheet extends StatefulWidget {
@@ -2095,6 +2201,19 @@ class _ConfirmEntrySheetState extends State<_ConfirmEntrySheet> {
   late final TextEditingController _refController;
   late final TextEditingController _balanceController;
   late TransactionType _selectedType;
+
+  // Snapshots for dirty state detection
+  late String _initialName;
+  late String _initialAccount;
+  late String _initialPhone;
+  late String _initialProvider;
+  late String _initialAmount;
+  late String _initialFee;
+  late String _initialDate;
+  late String _initialTime;
+  late String _initialRef;
+  late String _initialBalance;
+  late TransactionType _initialType;
 
   static const _platformNames = {
     Platform.gcash: 'GCash',
@@ -2133,7 +2252,7 @@ class _ConfirmEntrySheetState extends State<_ConfirmEntrySheet> {
       text: DateFormat('MMM d, yyyy').format(initialDate),
     );
     _timeController = TextEditingController(
-      text: DateFormat('hh:mm a').format(initialDate),
+      text: DateFormat('hh:mm a', 'en_US').format(initialDate),
     );
     
     _refController = TextEditingController(text: r.referenceNumber ?? '');
@@ -2154,6 +2273,51 @@ class _ConfirmEntrySheetState extends State<_ConfirmEntrySheet> {
       } else if (r.amount != null) {
         _onAmountChanged();
       }
+    }
+
+    _initialType = _selectedType;
+    _initialName = _nameController.text;
+    _initialAccount = _accountNumberController.text;
+    _initialPhone = _phoneController.text;
+    _initialProvider = _serviceProviderController.text;
+    _initialAmount = _amountController.text;
+    _initialFee = _feeController.text;
+    _initialDate = _dateController.text;
+    _initialTime = _timeController.text;
+    _initialRef = _refController.text;
+    _initialBalance = _balanceController.text;
+  }
+
+  bool get _isDirty {
+    return _selectedType != _initialType ||
+           _nameController.text != _initialName ||
+           _accountNumberController.text != _initialAccount ||
+           _phoneController.text != _initialPhone ||
+           _serviceProviderController.text != _initialProvider ||
+           _amountController.text != _initialAmount ||
+           _feeController.text != _initialFee ||
+           _dateController.text != _initialDate ||
+           _timeController.text != _initialTime ||
+           _refController.text != _initialRef ||
+           _balanceController.text != _initialBalance;
+  }
+
+  Future<void> _onCancel() async {
+    if (_isDirty) {
+      final confirm = await AppDialog.showThemedDialog(
+        context,
+        title: 'Discard Changes?',
+        content: 'Are you sure you want to cancel? All entered data will be lost.',
+        confirmLabel: 'Discard',
+        cancelLabel: 'Cancel',
+        accentColor: const Color(0xFFC62828),
+        icon: Icons.warning_amber_rounded,
+      );
+      if (confirm == true && mounted) {
+        Navigator.of(context).pop(null);
+      }
+    } else {
+      Navigator.of(context).pop(null);
     }
   }
 
@@ -2242,7 +2406,7 @@ class _ConfirmEntrySheetState extends State<_ConfirmEntrySheet> {
     final initialDate = widget.receipt.transactionDate ?? DateTime.now();
     TimeOfDay initial = TimeOfDay.fromDateTime(initialDate);
     try {
-      final parsedDate = DateFormat('hh:mm a').parse(_timeController.text.trim());
+      final parsedDate = DateFormat('hh:mm a', 'en_US').parse(_timeController.text.trim());
       initial = TimeOfDay.fromDateTime(parsedDate);
     } catch (_) {}
 
@@ -2266,18 +2430,18 @@ class _ConfirmEntrySheetState extends State<_ConfirmEntrySheet> {
     if (picked != null) {
       setState(() {
         final parsedDate = DateTime(2020, 1, 1, picked.hour, picked.minute);
-        _timeController.text = DateFormat('hh:mm a').format(parsedDate);
+        _timeController.text = DateFormat('hh:mm a', 'en_US').format(parsedDate);
       });
     }
   }
 
-  void _onSave() {
+  Future<void> _onSave() async {
     final amtVal = double.tryParse(_amountController.text.replaceAll(',', '').trim());
     final balVal = double.tryParse(_balanceController.text.replaceAll(',', '').trim());
     DateTime? dtVal;
     try {
       final datePart = DateFormat('MMM d, yyyy').parse(_dateController.text.trim());
-      final parsedTime = DateFormat('hh:mm a').parse(_timeController.text.trim());
+      final parsedTime = DateFormat('hh:mm a', 'en_US').parse(_timeController.text.trim());
       dtVal = DateTime(datePart.year, datePart.month, datePart.day, parsedTime.hour, parsedTime.minute);
     } catch (_) {
       dtVal = widget.receipt.transactionDate ?? DateTime.now();
@@ -2309,6 +2473,24 @@ class _ConfirmEntrySheetState extends State<_ConfirmEntrySheet> {
       fee: feeVal,
     );
 
+    // ── Duplicate reference number guard ─────────────────────────────────
+    final refNum = _refController.text.trim();
+    final normalizedRef = refNum.replaceAll(RegExp(r'\s+'), '').toUpperCase();
+    if (!normalizedRef.startsWith('UNKNOWN') && normalizedRef.isNotEmpty) {
+      final duplicate = await _db.findDuplicateReference(refNum);
+      if (duplicate != null && mounted) {
+        final color = _platformColors[widget.receipt.platform] ?? const Color(0xFF888888);
+        await AppDialog.showDuplicateReferenceAlert(
+          context,
+          refNumber: refNum,
+          accentColor: color,
+        );
+        // Always block the save — user must correct the reference number.
+        return;
+      }
+    }
+
+    if (!mounted) return;
     Navigator.of(context).pop(edited);
   }
 
@@ -2532,7 +2714,7 @@ class _ConfirmEntrySheetState extends State<_ConfirmEntrySheet> {
                         height: 54,
                         child: OutlinedButton.icon(
                           key: const ValueKey('btn_cancel_entry'),
-                          onPressed: () => Navigator.of(context).pop(null),
+                          onPressed: _onCancel,
                           icon: const Icon(Icons.close_rounded, size: 20),
                           label: const Text('CANCEL'),
                           style: OutlinedButton.styleFrom(
@@ -2817,6 +2999,7 @@ class _SearchFilterModalState extends State<_SearchFilterModal> {
     'PLDT Home',
     'Home Credit',
     'Tala',
+    'Converge',
     'Easytrip RFID',
     'Other detected providers',
   ];
