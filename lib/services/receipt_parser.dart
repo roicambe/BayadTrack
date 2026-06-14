@@ -541,15 +541,28 @@ class ReceiptParser {
 
   // ── Account Number extraction ─────────────────────────────────────────────
   static String? _extractAccountNumber(String text) {
-    // Maya format: "with Account Number ******9151"
+    // Maya format: "with Account Number ******9151" or "***********V2DY"
+    // \w covers digits, letters, and underscore — necessary for alphanumeric
+    // masked endings like V2DY. Trailing punctuation/whitespace is stripped.
     final match = RegExp(
-      r'(?:Account\s*(?:No\.?|Number|#))\s*[:\s]?\s*([*\d][*\d\s-]+[\d*])',
+      r'(?:Account\s*(?:No\.?|Number|#))\s*[:\s]?\s*([*\w][*\w\s-]*)',
       caseSensitive: false,
     ).firstMatch(text);
-    return match?.group(1)?.trim();
+    if (match == null) return null;
+    return match.group(1)!.trim().replaceAll(RegExp(r'[.\s]+$'), '');
   }
 
   // ── Date/time extraction ─────────────────────────────────────────────────
+
+  // GCash full month name format: "13 June 2026, 07:43 AM"
+  // Added to handle GCash notifications that use full month names instead of
+  // abbreviated ones (Jun, Dec). Must be tried BEFORE the abbreviated patterns.
+  static final _gcashFullMonthDateRe = RegExp(
+    r'(\d{1,2})\s+'
+    r'(January|February|March|April|May|June|July|August|September|October|November|December)'
+    r'\s+(\d{4})[,\s]+(\d{1,2}):(\d{2})\s*(AM|PM)',
+    caseSensitive: false,
+  );
 
   // Maya compact format: 05Jun 08:32: (DDMon HH:MM — no year, infer current year)
   static final _mayaCompactDateRe = RegExp(
@@ -580,6 +593,26 @@ class ReceiptParser {
   );
 
   static DateTime? _extractDate(String text) {
+    // GCash full month name format: "13 June 2026, 07:43 AM"
+    // Tried first so it takes priority over abbreviated patterns for GCash messages.
+    final gcashFull = _gcashFullMonthDateRe.firstMatch(text);
+    if (gcashFull != null) {
+      try {
+        final d    = int.parse(gcashFull.group(1)!);
+        final mStr = gcashFull.group(2)!;
+        final y    = int.parse(gcashFull.group(3)!);
+        int   h    = int.parse(gcashFull.group(4)!);
+        final mi   = int.parse(gcashFull.group(5)!);
+        final ampm = gcashFull.group(6)!.toUpperCase();
+        final mo   = _monthFromFullName(mStr);
+        if (mo != null) {
+          if (ampm == 'PM' && h < 12) h += 12;
+          if (ampm == 'AM' && h == 12) h = 0;
+          return DateTime(y, mo, d, h, mi);
+        }
+      } catch (_) {}
+    }
+
     // Maya compact format: 05Jun 08:32: — infer current year
     final mayaCompact = _mayaCompactDateRe.firstMatch(text);
     if (mayaCompact != null) {
@@ -668,6 +701,17 @@ class ReceiptParser {
       'sep': 9, 'oct': 10, 'nov': 11, 'dec': 12,
     };
     return months[abbr.toLowerCase()];
+  }
+
+  /// Helper: converts full month name to month number (1-12).
+  /// Used for GCash notifications that write out months in full ("June", "March", etc.).
+  static int? _monthFromFullName(String name) {
+    const months = {
+      'january': 1, 'february': 2, 'march': 3, 'april': 4,
+      'may': 5, 'june': 6, 'july': 7, 'august': 8,
+      'september': 9, 'october': 10, 'november': 11, 'december': 12,
+    };
+    return months[name.toLowerCase()];
   }
 
   // ── Public API ───────────────────────────────────────────────────────────

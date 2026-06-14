@@ -1,14 +1,18 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
+
 import 'package:intl/intl.dart';
 
 import '../database/isar_service.dart';
 import '../database/transaction_model.dart';
 import '../services/app_toast.dart';
+import '../services/format_utils.dart';
 import '../services/ocr_service.dart';
 import '../services/receipt_parser.dart';
 import '../theme/app_colors.dart';
 import '../services/app_dialog.dart';
+
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Tab → Platform helpers
@@ -539,10 +543,17 @@ class _PlatformTabContentState extends State<_PlatformTabContent> {
                 // 2. Search Query Filter
                 if (widget.searchQuery.isNotEmpty) {
                   final q = widget.searchQuery.toLowerCase();
+                  // Strip spaces from query so "0921 528" and "09215288" both match
+                  final qStripped = q.replaceAll(RegExp(r'\s+'), '');
                   bool matchQuery = false;
                   if ((r.senderName ?? '').toLowerCase().contains(q)) matchQuery = true;
+                  // Strip spaces from stored phone/ref before comparing
+                  final phoneStripped = FormatUtils.stripPhone(r.senderNumber ?? '').toLowerCase();
+                  final refStripped   = FormatUtils.stripSpaces(r.referenceNumber).toLowerCase();
+                  if (phoneStripped.contains(qStripped)) matchQuery = true;
                   if ((r.senderNumber ?? '').toLowerCase().contains(q)) matchQuery = true;
                   if ((r.serviceProvider ?? '').toLowerCase().contains(q)) matchQuery = true;
+                  if (refStripped.contains(qStripped)) matchQuery = true;
                   if (r.referenceNumber.toLowerCase().contains(q)) matchQuery = true;
                   if (r.amount.toString().contains(q)) matchQuery = true;
                   if (!matchQuery) return false;
@@ -1295,7 +1306,9 @@ class _TransactionCardState extends State<_TransactionCard> {
                         ],
                         const SizedBox(height: 3),
                         Text(
-                          widget.record.senderNumber ?? 'No Contact Number',
+                          FormatUtils.formatPhone(widget.record.senderNumber).isEmpty
+                              ? (widget.record.senderNumber ?? 'No Contact Number')
+                              : FormatUtils.formatPhone(widget.record.senderNumber),
                           style: theme.textTheme.labelMedium?.copyWith(
                             color: theme.colorScheme.onSurface.withValues(alpha: 0.55),
                           ),
@@ -1456,8 +1469,16 @@ class _TransactionDetailsSheetState extends State<_TransactionDetailsSheet> {
     super.initState();
     final r = widget.record;
     _nameController = TextEditingController(text: r.senderName ?? '');
-    _accountNumberController = TextEditingController(text: r.accountNumber ?? '');
-    _phoneController = TextEditingController(text: r.senderNumber ?? '');
+    // Format for display: account numbers and reference numbers use groups-of-4
+    // for Maya; phone numbers use XXXX XXX XXXX for both platforms.
+    _accountNumberController = TextEditingController(
+      text: r.platform == Platform.maya
+          ? FormatUtils.formatGroups4(r.accountNumber)
+          : (r.accountNumber ?? ''),
+    );
+    _phoneController = TextEditingController(
+      text: FormatUtils.formatPhone(r.senderNumber),
+    );
     _serviceProviderController = TextEditingController(text: r.serviceProvider ?? '');
     _amountController = TextEditingController(text: r.amount.toStringAsFixed(2));
     _feeController = TextEditingController(
@@ -1470,7 +1491,11 @@ class _TransactionDetailsSheetState extends State<_TransactionDetailsSheet> {
     _timeController = TextEditingController(
       text: DateFormat('hh:mm a', 'en_US').format(r.timestamp),
     );
-    _refController = TextEditingController(text: r.referenceNumber);
+    _refController = TextEditingController(
+      text: r.platform == Platform.maya
+          ? FormatUtils.formatGroups4(r.referenceNumber)
+          : r.referenceNumber,
+    );
     _balanceController = TextEditingController(
       text: r.remainingBalance != null ? r.remainingBalance!.toStringAsFixed(2) : '',
     );
@@ -1603,11 +1628,18 @@ class _TransactionDetailsSheetState extends State<_TransactionDetailsSheet> {
       dtVal = widget.record.timestamp;
     }
 
-    final newName = _nameController.text.trim().isEmpty ? null : _nameController.text.trim();
-    final newAccount = _accountNumberController.text.trim().isEmpty ? null : _accountNumberController.text.trim();
-    final newPhone = _phoneController.text.trim().isEmpty ? null : _phoneController.text.trim();
+    final newName    = _nameController.text.trim().isEmpty ? null : _nameController.text.trim();
+    // Strip display-formatting spaces before persisting
+    final newAccount = _accountNumberController.text.trim().isEmpty
+        ? null
+        : FormatUtils.stripSpaces(_accountNumberController.text.trim());
+    final newPhone   = _phoneController.text.trim().isEmpty
+        ? null
+        : FormatUtils.stripPhone(_phoneController.text.trim());
     final newProvider = _serviceProviderController.text.trim().isEmpty ? null : _serviceProviderController.text.trim();
-    final newRef = _refController.text.trim().isEmpty ? 'UNKNOWN-${DateTime.now().millisecondsSinceEpoch}' : _refController.text.trim();
+    final newRef     = _refController.text.trim().isEmpty
+        ? 'UNKNOWN-${DateTime.now().millisecondsSinceEpoch}'
+        : FormatUtils.stripSpaces(_refController.text.trim());
 
     final feeVal = double.tryParse(_feeController.text.replaceAll(',', '').trim());
 
@@ -1747,7 +1779,8 @@ class _TransactionDetailsSheetState extends State<_TransactionDetailsSheet> {
                         label: 'Account Number',
                         controller: _accountNumberController,
                         icon: Icons.account_balance_wallet_rounded,
-                        keyboardType: TextInputType.number,
+                        keyboardType: TextInputType.text,
+                        inputFormatters: [GroupOf4Formatter()],
                         activeColor: color,
                       ),
                     ],
@@ -1756,6 +1789,7 @@ class _TransactionDetailsSheetState extends State<_TransactionDetailsSheet> {
                       controller: _phoneController,
                       icon: Icons.phone_iphone_rounded,
                       keyboardType: TextInputType.phone,
+                      inputFormatters: [PhoneNumberFormatter()],
                       activeColor: color,
                     ),
                     if (widget.record.platform == Platform.maya && _transactionType != TransactionType.sent && _transactionType != TransactionType.received) ...[
@@ -1832,7 +1866,10 @@ class _TransactionDetailsSheetState extends State<_TransactionDetailsSheet> {
                       label: 'Reference Number',
                       controller: _refController,
                       icon: Icons.numbers_rounded,
-                      keyboardType: TextInputType.number,
+                      keyboardType: TextInputType.text,
+                      inputFormatters: widget.record.platform == Platform.maya
+                          ? [GroupOf4Formatter()]
+                          : null,
                       activeColor: color,
                     ),
                     _EditField(
@@ -2237,8 +2274,16 @@ class _ConfirmEntrySheetState extends State<_ConfirmEntrySheet> {
     final r = widget.receipt;
     _selectedType = r.transactionType;
     _nameController = TextEditingController(text: r.personName ?? '');
-    _accountNumberController = TextEditingController(text: r.accountNumber ?? '');
-    _phoneController = TextEditingController(text: r.phoneNumber ?? '');
+    // Format for display: groups-of-4 for Maya account/reference numbers;
+    // XXXX XXX XXXX for phone numbers on both platforms.
+    _accountNumberController = TextEditingController(
+      text: r.platform == Platform.maya
+          ? FormatUtils.formatGroups4(r.accountNumber)
+          : (r.accountNumber ?? ''),
+    );
+    _phoneController = TextEditingController(
+      text: FormatUtils.formatPhone(r.phoneNumber),
+    );
     _serviceProviderController = TextEditingController(text: r.serviceProvider ?? '');
     _amountController = TextEditingController(
       text: r.amount?.toStringAsFixed(2) ?? '',
@@ -2255,7 +2300,11 @@ class _ConfirmEntrySheetState extends State<_ConfirmEntrySheet> {
       text: DateFormat('hh:mm a', 'en_US').format(initialDate),
     );
     
-    _refController = TextEditingController(text: r.referenceNumber ?? '');
+    _refController = TextEditingController(
+      text: r.platform == Platform.maya
+          ? FormatUtils.formatGroups4(r.referenceNumber)
+          : (r.referenceNumber ?? ''),
+    );
     _balanceController = TextEditingController(
       text: r.remainingBalance != null
           ? r.remainingBalance!.toStringAsFixed(2)
@@ -2455,16 +2504,16 @@ class _ConfirmEntrySheetState extends State<_ConfirmEntrySheet> {
       amount: amtVal,
       referenceNumber: _refController.text.trim().isEmpty
           ? null
-          : _refController.text.trim(),
+          : FormatUtils.stripSpaces(_refController.text.trim()),
       personName: _nameController.text.trim().isEmpty
           ? null
           : _nameController.text.trim(),
       accountNumber: _accountNumberController.text.trim().isEmpty
           ? null
-          : _accountNumberController.text.trim(),
+          : FormatUtils.stripSpaces(_accountNumberController.text.trim()),
       phoneNumber: _phoneController.text.trim().isEmpty
           ? null
-          : _phoneController.text.trim(),
+          : FormatUtils.stripPhone(_phoneController.text.trim()),
       serviceProvider: _serviceProviderController.text.trim().isEmpty
           ? null
           : _serviceProviderController.text.trim(),
@@ -2597,7 +2646,8 @@ class _ConfirmEntrySheetState extends State<_ConfirmEntrySheet> {
                         label: 'Account Number',
                         controller: _accountNumberController,
                         icon: Icons.account_balance_wallet_rounded,
-                        keyboardType: TextInputType.number,
+                        keyboardType: TextInputType.text,
+                        inputFormatters: [GroupOf4Formatter()],
                         activeColor: color,
                       ),
                     ],
@@ -2606,6 +2656,7 @@ class _ConfirmEntrySheetState extends State<_ConfirmEntrySheet> {
                       controller: _phoneController,
                       icon: Icons.phone_iphone_rounded,
                       keyboardType: TextInputType.phone,
+                      inputFormatters: [PhoneNumberFormatter()],
                       activeColor: color,
                     ),
                     if (widget.receipt.platform == Platform.maya && _selectedType != TransactionType.sent && _selectedType != TransactionType.received) ...[
@@ -2682,7 +2733,10 @@ class _ConfirmEntrySheetState extends State<_ConfirmEntrySheet> {
                       label: 'Reference Number',
                       controller: _refController,
                       icon: Icons.numbers_rounded,
-                      keyboardType: TextInputType.number,
+                      keyboardType: TextInputType.text,
+                      inputFormatters: widget.receipt.platform == Platform.maya
+                          ? [GroupOf4Formatter()]
+                          : null,
                       activeColor: color,
                     ),
                     _EditField(
@@ -2771,6 +2825,7 @@ class _EditField extends StatelessWidget {
   final String? prefixText;
   final Widget? suffixIcon;
   final TextInputType keyboardType;
+  final List<TextInputFormatter>? inputFormatters;
   final Color activeColor;
   final VoidCallback? onTap;
   final bool readOnly;
@@ -2783,6 +2838,7 @@ class _EditField extends StatelessWidget {
     this.prefixText,
     this.suffixIcon,
     this.keyboardType = TextInputType.text,
+    this.inputFormatters,
     this.onTap,
     this.readOnly = false,
   });
@@ -2808,6 +2864,7 @@ class _EditField extends StatelessWidget {
           TextField(
             controller: controller,
             keyboardType: keyboardType,
+            inputFormatters: inputFormatters,
             readOnly: readOnly,
             onTap: onTap,
             style: theme.textTheme.bodyMedium?.copyWith(
