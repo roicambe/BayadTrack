@@ -132,6 +132,16 @@ class IsarService {
   /// and updates their recipient name to ensure absolute data consistency.
   Future<void> saveTransaction(TransactionRecord record) async {
     final isar = await db;
+    
+    // Always store stripped values in the database
+    if (record.senderNumber != null) {
+      record.senderNumber = record.senderNumber!.replaceAll(RegExp(r'\s+'), '');
+    }
+    if (record.accountNumber != null) {
+      record.accountNumber = record.accountNumber!.replaceAll(RegExp(r'\s+'), '');
+    }
+    record.referenceNumber = record.referenceNumber.replaceAll(RegExp(r'\s+'), '');
+
     // Auto-populate recordedAt timestamp on create if not already set
     record.recordedAt ??= DateTime.now();
     

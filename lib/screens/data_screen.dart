@@ -4,6 +4,8 @@ import 'package:image_picker/image_picker.dart';
 
 import 'package:intl/intl.dart';
 
+import '../database/history_model.dart';
+import '../database/history_service.dart';
 import '../database/isar_service.dart';
 import '../database/transaction_model.dart';
 import '../services/app_toast.dart';
@@ -130,7 +132,7 @@ class DataScreenState extends State<DataScreen>
     final receipt = receipts.first;
     _autoSwitchTab(receipt.platform);
     if (!mounted) return;
-    await _showConfirmDialog(receipt);
+    await _showConfirmDialog(receipt, sourceType: HistorySourceType.sharedText);
   }
 
   Future<void> processSharedImagePath(String filePath) async {
@@ -140,7 +142,7 @@ class DataScreenState extends State<DataScreen>
       final receipt = ReceiptParser.parse(text);
       _autoSwitchTab(receipt.platform);
       if (!mounted) return;
-      await _showConfirmDialog(receipt);
+      await _showConfirmDialog(receipt, sourceType: HistorySourceType.sharedText);
     } catch (_) {
       if (!mounted) return;
       AppToast.error(context, 'Could not read image. Please try again.');
@@ -169,7 +171,7 @@ class DataScreenState extends State<DataScreen>
       final receipt = ReceiptParser.parse(text);
       _autoSwitchTab(receipt.platform);
       if (!mounted) return;
-      await _showConfirmDialog(receipt);
+      await _showConfirmDialog(receipt, sourceType: HistorySourceType.imageUpload);
     } catch (_) {
       if (!mounted) return;
       AppToast.error(
@@ -205,14 +207,19 @@ class DataScreenState extends State<DataScreen>
           // Single transaction workflow
           final receipt = receipts.first;
           _autoSwitchTab(receipt.platform);
-          await _showConfirmDialog(receipt);
+          await _showConfirmDialog(receipt, sourceType: HistorySourceType.pasteText);
         },
       ),
     );
   }
 
   /// Shows the confirm sheet. Returns true if user confirmed + saved.
-  Future<void> _showConfirmDialog(ParsedReceipt receipt, {bool isManual = false}) async {
+  /// [sourceType] identifies the input method for history logging.
+  Future<void> _showConfirmDialog(
+    ParsedReceipt receipt, {
+    bool isManual = false,
+    HistorySourceType sourceType = HistorySourceType.manualInput,
+  }) async {
     final editedReceipt = await showModalBottomSheet<ParsedReceipt>(
       context: context,
       isScrollControlled: true,
@@ -227,6 +234,33 @@ class DataScreenState extends State<DataScreen>
       await _db.saveFromParsedReceipt(editedReceipt, manualFee: editedReceipt.fee);
       if (!mounted) return;
       AppToast.success(context, 'Transaction saved!');
+
+      // ── History logging (Add) ───────────────────────────────────────────
+      // Determine snapshot content based on source type
+      final String snapshot;
+      final HistorySourceType resolvedSource;
+      if (isManual) {
+        resolvedSource = HistorySourceType.manualInput;
+        snapshot = HistoryService.buildManualSnapshot(editedReceipt);
+      } else if (sourceType == HistorySourceType.imageUpload) {
+        resolvedSource = HistorySourceType.imageUpload;
+        snapshot = HistoryService.buildImageUploadSnapshot(editedReceipt);
+      } else {
+        // sharedText or pasteText — save the original raw text
+        resolvedSource = sourceType;
+        snapshot = HistoryService.buildRawTextSnapshot(editedReceipt);
+      }
+      final entry = TransactionHistoryEntry(
+        id: HistoryService.generateId(),
+        action: HistoryActionType.add,
+        sourceType: resolvedSource,
+        platform: editedReceipt.platform,
+        recordedAt: DateTime.now(),
+        snapshot: snapshot,
+        summary: HistoryService.buildReceiptSummary(editedReceipt),
+      );
+      HistoryService().saveEntry(entry);
+      // ────────────────────────────────────────────────────────────────────
     } catch (_) {
       if (!mounted) return;
       AppToast.error(context, 'Failed to save — please try again.');
@@ -269,7 +303,11 @@ class DataScreenState extends State<DataScreen>
         transactionType: TransactionType.sent,
         transactionDate: DateTime.now(),
       );
-      await _showConfirmDialog(emptyReceipt, isManual: true);
+      await _showConfirmDialog(
+        emptyReceipt,
+        isManual: true,
+        sourceType: HistorySourceType.manualInput,
+      );
     }
   }
 
@@ -1167,6 +1205,19 @@ class _TransactionCardState extends State<_TransactionCard> {
 
             await _db.deleteTransaction(widget.record.id);
 
+            // ── History logging (Delete) ─────────────────────────────────
+            final deleteEntry = TransactionHistoryEntry(
+              id: HistoryService.generateId(),
+              action: HistoryActionType.delete,
+              sourceType: HistorySourceType.delete,
+              platform: recordCopy.platform,
+              recordedAt: DateTime.now(),
+              snapshot: HistoryService.buildDeleteSnapshot(recordCopy),
+              summary: HistoryService.buildRecordSummary(recordCopy),
+            );
+            HistoryService().saveEntry(deleteEntry);
+            // ─────────────────────────────────────────────────────────
+
             AppToast.undoDelete(
               messenger,
               onUndo: () async {
@@ -1644,12 +1695,12 @@ class _TransactionDetailsSheetState extends State<_TransactionDetailsSheet> {
     final feeVal = double.tryParse(_feeController.text.replaceAll(',', '').trim());
 
     final isNameChanged = newName != widget.record.senderName;
-    final isAccountChanged = newAccount != widget.record.accountNumber;
-    final isPhoneChanged = newPhone != widget.record.senderNumber;
+    final isAccountChanged = FormatUtils.stripSpaces(newAccount ?? '') != FormatUtils.stripSpaces(widget.record.accountNumber ?? '');
+    final isPhoneChanged = FormatUtils.stripSpaces(newPhone ?? '') != FormatUtils.stripSpaces(widget.record.senderNumber ?? '');
     final isProviderChanged = newProvider != widget.record.serviceProvider;
     final isAmountChanged = amtVal != widget.record.amount;
     final isDateChanged = dtVal != widget.record.timestamp;
-    final isRefChanged = newRef != widget.record.referenceNumber;
+    final isRefChanged = FormatUtils.stripSpaces(newRef) != FormatUtils.stripSpaces(widget.record.referenceNumber);
     final isBalanceChanged = balVal != widget.record.remainingBalance;
     final isTypeChanged = _transactionType != widget.record.transactionType;
     final isFeeChanged = feeVal != widget.record.fee;
@@ -1672,6 +1723,23 @@ class _TransactionDetailsSheetState extends State<_TransactionDetailsSheet> {
       return;
     }
 
+    final beforeRecord = TransactionRecord()
+      ..id = widget.record.id
+      ..platform = widget.record.platform
+      ..transactionType = widget.record.transactionType
+      ..amount = widget.record.amount
+      ..referenceNumber = widget.record.referenceNumber
+      ..timestamp = widget.record.timestamp
+      ..senderName = widget.record.senderName
+      ..senderNumber = widget.record.senderNumber
+      ..accountNumber = widget.record.accountNumber
+      ..remainingBalance = widget.record.remainingBalance
+      ..recordedAt = widget.record.recordedAt
+      ..notes = widget.record.notes
+      ..serviceProvider = widget.record.serviceProvider
+      ..fee = widget.record.fee
+      ..isSettled = widget.record.isSettled;
+
     final updated = widget.record
       ..senderName = newName
       ..accountNumber = newAccount
@@ -1688,6 +1756,23 @@ class _TransactionDetailsSheetState extends State<_TransactionDetailsSheet> {
       await _db.saveTransaction(updated);
       if (!mounted) return;
       AppToast.success(context, 'Transaction updated!');
+
+      // ── History logging (Edit) ─────────────────────────────────────────
+      final editEntry = TransactionHistoryEntry(
+        id: HistoryService.generateId(),
+        action: HistoryActionType.edit,
+        sourceType: HistorySourceType.edit,
+        platform: updated.platform,
+        recordedAt: DateTime.now(),
+        snapshot: HistoryService.buildEditDiffSnapshot(
+          before: beforeRecord,
+          after: updated,
+        ),
+        summary: HistoryService.buildRecordSummary(updated),
+      );
+      HistoryService().saveEntry(editEntry);
+      // ───────────────────────────────────────────────────────────────
+
       Navigator.of(context).pop();
     } catch (_) {
       if (!mounted) return;

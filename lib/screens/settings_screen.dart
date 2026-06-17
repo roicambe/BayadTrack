@@ -5,6 +5,7 @@ import '../theme/theme_provider.dart';
 import '../theme/app_colors.dart';
 import 'fee_settings_screen.dart';
 import 'maya_fee_settings_screen.dart';
+import 'transaction_history_screen.dart';
 
 /// Settings screen — three sections:
 ///   1. Appearance   — Light / Dark / System theme toggle with visual previews
@@ -116,6 +117,50 @@ class SettingsScreen extends StatelessWidget {
                   color: AppColors.backupBlue,
                   onTap: () {
                     // TODO: implement database backup
+                  },
+                ),
+                const SizedBox(height: 8),
+              ],
+            ),
+            const SizedBox(height: 16),
+
+            _SettingsExpansionTile(
+              title: 'Transaction History',
+              icon: Icons.manage_search_rounded,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.info_outline_rounded,
+                        size: 14,
+                        color: Colors.deepPurple.shade300,
+                      ),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          'For debugging and audit purposes only. Records the original source of every transaction action.',
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: Colors.deepPurple.shade300,
+                            fontStyle: FontStyle.italic,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                _DataActionButton(
+                  icon: Icons.history_rounded,
+                  label: 'View Transaction History',
+                  color: Colors.deepPurple,
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const TransactionHistoryScreen(),
+                      ),
+                    );
                   },
                 ),
                 const SizedBox(height: 8),
